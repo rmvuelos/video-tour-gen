@@ -1,0 +1,6 @@
+# Overlay for CI and verify:ci: the tools container must not read a developer's .env.local.
+services:
+  backend:
+    env_file: !reset []
+    environment:
+      IGNORE_LOCAL_ENV: '1'
