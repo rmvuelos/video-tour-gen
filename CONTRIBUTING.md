@@ -25,7 +25,7 @@ Fuente: `docs/01-Proyectos/AI 3D Vision/Tasks/Convenciones git y PRs.md`.
 - Formato [Conventional Commits](https://www.conventionalcommits.org/es/v1.0.0/): `tipo(ámbito): descripción`. El ámbito es obligatorio.
 - **Tipos:** `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `ci`.
 - **Ámbitos:** `frontend`, `backend`, `cv`, `scene`, `infra`, `docs`.
-- Descripción en imperativo y en minúsculas, de 72 caracteres como máximo. Ejemplo: `feat(cv): detectar muros con transformada de Hough`.
+- Descripción en imperativo, de 72 caracteres como máximo; empieza en minúscula y los nombres propios se respetan. Ejemplo: `feat(cv): detectar muros con transformada de Hough`.
 - Commits atómicos: un cambio lógico por commit, y el `test:` antes del `feat:`. Cada commit compila y pasa los tests.
 - Cambios que rompen compatibilidad: `feat(scene)!: ...` y una línea `BREAKING CHANGE:` en el cuerpo.
 - Nunca subir secretos: van en `.env.local` (ignorado por git) y se documentan en `.env.example`.
