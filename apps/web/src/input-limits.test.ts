@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 
@@ -17,7 +18,7 @@ const inputLimits = z.object({
 })
 
 const raw: unknown = JSON.parse(
-  readFileSync(new URL('../../../shared/input-limits.json', import.meta.url), 'utf8'),
+  readFileSync(resolve(import.meta.dirname, '../../../shared/input-limits.json'), 'utf8'),
 )
 
 describe('shared/input-limits.json', () => {
