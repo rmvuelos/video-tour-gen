@@ -1,0 +1,11 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    ".": { "entry": ["scripts/*.mjs"] },
+    "apps/web": {
+      "entry": ["e2e/*.spec.ts"],
+      // Installed ahead of the first interactive component tests (phase 3); remove once used.
+      "ignoreDependencies": ["@testing-library/user-event"]
+    }
+  }
+}
