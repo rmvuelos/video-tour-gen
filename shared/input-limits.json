@@ -1,0 +1,18 @@
+{
+  "floorPlan": {
+    "mimeTypes": ["application/pdf", "image/png", "image/jpeg"],
+    "extensions": [".pdf", ".png", ".jpg", ".jpeg"],
+    "maxCount": 1,
+    "maxBytes": 20971520,
+    "maxPdfPages": 50
+  },
+  "photos": {
+    "mimeTypes": ["image/jpeg", "image/png", "image/webp"],
+    "extensions": [".jpg", ".jpeg", ".png", ".webp"],
+    "minCount": 3,
+    "maxCount": 10,
+    "maxBytes": 12582912
+  },
+  "description": { "maxChars": 2000 },
+  "areaSquareMeters": { "optional": true, "exclusiveMin": 0 }
+}
