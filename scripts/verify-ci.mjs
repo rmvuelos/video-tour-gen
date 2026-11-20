@@ -59,6 +59,7 @@ const jobs = [
     'commits',
     [
       'pnpm exec commitlint --from origin/main --to HEAD',
+      'node --test scripts/attribution.test.mjs',
       'node scripts/check-attribution.mjs origin/main..HEAD',
     ],
   ],

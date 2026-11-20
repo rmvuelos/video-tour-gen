@@ -109,4 +109,5 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/setup-web
       - run: pnpm exec commitlint --from "$BASE_SHA" --to "$HEAD_SHA"
+      - run: node --test scripts/attribution.test.mjs
       - run: node scripts/check-attribution.mjs "$BASE_SHA..$HEAD_SHA"
