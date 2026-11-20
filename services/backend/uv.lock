@@ -115,15 +115,15 @@ dev = [
 requires-dist = [
     { name = "celery", specifier = ">=5.7.0" },
     { name = "fastapi", specifier = ">=0.165.0" },
-    { name = "packaging" },
-    { name = "pydantic-settings", specifier = ">=2.0" },
+    { name = "packaging", specifier = ">=24" },
+    { name = "pydantic-settings", specifier = ">=2.16" },
     { name = "redis", specifier = ">=8.1.0" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.54" },
 ]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "httpx2" },
+    { name = "httpx2", specifier = ">=2.16" },
     { name = "mypy", specifier = ">=1.10" },
     { name = "pytest", specifier = ">=8" },
     { name = "pytest-cov", specifier = ">=5" },
