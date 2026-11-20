@@ -218,3 +218,21 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Node / Vite / Playwright
+node_modules/
+.pnpm-store/
+*.tsbuildinfo
+coverage/
+playwright-report/
+test-results/
+blob-report/
+.vite/
+
+# Local env (secrets)
+.env.local
+.env*.local
+
+# Supabase CLI
+supabase/.temp/
+supabase/.branches/
