@@ -1,8 +1,7 @@
 // Fails when a commit message in <range> carries AI attribution.
 // Usage: node scripts/check-attribution.mjs <base>..<head>   |   --message "<text>" (self-test)
 import { execFileSync } from 'node:child_process'
-
-const FORBIDDEN = /co-authored-by|generated with|claude|anthropic/i
+import { hasAttribution } from './attribution.mjs'
 
 const [flag, value] = process.argv.slice(2)
 let messages
@@ -23,7 +22,7 @@ if (flag === '--message') {
   process.exit(2)
 }
 
-const bad = messages.filter(({ body }) => FORBIDDEN.test(body))
+const bad = messages.filter(({ body }) => hasAttribution(body))
 for (const { id, body } of bad) {
   console.error(`attribution found in ${id}: ${body.split('\n')[0]}`)
 }
