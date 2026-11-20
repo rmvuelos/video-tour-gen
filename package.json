@@ -17,6 +17,7 @@
     "format:check": "prettier --check . && docker compose -f infra/docker-compose.yml run --rm backend ruff format --check .",
     "test": "pnpm --filter web test && docker compose -f infra/docker-compose.yml run --rm backend pytest",
     "e2e": "pnpm --filter web e2e",
+    "verify:ci": "node scripts/verify-ci.mjs",
     "prepare": "lefthook install"
   },
   "devDependencies": {
