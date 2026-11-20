@@ -1,0 +1,35 @@
+name: video-tour-gen
+
+x-backend: &backend
+  build:
+    context: ../services/backend
+  image: video-tour-gen-backend
+  env_file:
+    - path: ../services/backend/.env.local
+      required: false
+  environment:
+    REDIS_URL: redis://redis:6379/0
+  volumes:
+    - ../services/backend:/app
+    - ../shared:/shared:ro
+  depends_on: [redis]
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports: ['56379:6379']
+
+  api:
+    <<: *backend
+    command: uvicorn app.api:app --host 0.0.0.0 --port 8000 --reload
+    ports: ['58000:8000']
+
+  worker:
+    <<: *backend
+    command: celery -A app.worker.celery_app worker -P prefork --concurrency 2 -l info
+
+  # one-off jobs: docker compose run --rm backend <cmd>
+  backend:
+    <<: *backend
+    profiles: [tools]
+    command: 'true'
