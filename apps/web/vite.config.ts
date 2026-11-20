@@ -5,7 +5,7 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   // verify:ci and the CI must not pick up a developer's apps/web/.env.local.
-  envDir: process.env['IGNORE_LOCAL_ENV'] ? import.meta.dirname + '/src' : undefined,
+  envDir: process.env['IGNORE_LOCAL_ENV'] ? import.meta.dirname + '/src' : import.meta.dirname,
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test-setup.ts'],
