@@ -5,7 +5,7 @@
     "apps/web": {
       "entry": ["e2e/*.spec.ts"],
       // Installed ahead of the first interactive component tests (phase 3); remove once used.
-      "ignoreDependencies": ["@testing-library/user-event"]
-    }
-  }
+      "ignoreDependencies": ["@testing-library/user-event"],
+    },
+  },
 }
