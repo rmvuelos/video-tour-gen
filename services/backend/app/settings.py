@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -8,9 +9,9 @@ class Settings(BaseSettings):
 
     supabase_url: str
     supabase_jwks_url: str
-    supabase_secret_key: str
+    supabase_secret_key: SecretStr
     redis_url: str
-    database_url: str
+    database_url: SecretStr  # carries the DB password: never log it
 
 
 @lru_cache
