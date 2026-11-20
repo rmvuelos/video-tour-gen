@@ -6,10 +6,10 @@ commit-msg:
 pre-commit:
   commands:
     web-format:
-      glob: "apps/web/**/*.{ts,tsx,js,json,css,html}"
+      glob: 'apps/web/**/*.{ts,tsx,js,json,css,html}'
       run: pnpm exec prettier --check {staged_files}
     web-lint:
-      glob: "apps/web/**/*.{ts,tsx}"
+      glob: 'apps/web/**/*.{ts,tsx}'
       run: pnpm --filter web exec eslint {staged_files}
 
 pre-push:
