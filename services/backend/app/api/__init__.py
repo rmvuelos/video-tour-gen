@@ -3,12 +3,12 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.settings import get_settings
+from app.startup import validate_startup
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    get_settings()  # fail fast when the process starts with a bad environment
+    validate_startup()  # fail fast when the process starts with a bad setup
     yield
 
 

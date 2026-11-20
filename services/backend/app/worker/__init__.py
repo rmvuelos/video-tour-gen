@@ -3,6 +3,7 @@ from typing import Any
 from celery import Celery, signals
 
 from app.settings import Settings, get_settings
+from app.startup import validate_startup
 
 celery_app = Celery("worker")
 
@@ -14,7 +15,8 @@ def configure_celery(settings: Settings) -> None:
 
 @signals.celeryd_init.connect
 def _configure_on_start(**_: Any) -> None:
-    configure_celery(get_settings())  # validates the environment at worker start
+    validate_startup()  # validates the environment and limits at worker start
+    configure_celery(get_settings())
 
 
 @celery_app.task(name="ping")
