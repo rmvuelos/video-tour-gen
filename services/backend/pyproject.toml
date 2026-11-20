@@ -31,7 +31,6 @@ addopts = "--cov=app --cov-report=term-missing"
 
 [tool.ruff]
 line-length = 100
-extend-exclude = ["../../docs"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM"]

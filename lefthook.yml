@@ -1,0 +1,25 @@
+commit-msg:
+  commands:
+    commitlint:
+      run: pnpm exec commitlint --edit {1}
+
+pre-commit:
+  commands:
+    web-format:
+      glob: "apps/web/**/*.{ts,tsx,js,json,css,html}"
+      run: pnpm exec prettier --check {staged_files}
+    web-lint:
+      glob: "apps/web/**/*.{ts,tsx}"
+      run: pnpm --filter web exec eslint {staged_files}
+
+pre-push:
+  commands:
+    protect-main:
+      use_stdin: true
+      run: |
+        while read -r _ _ remote_ref _; do
+          if [ "$remote_ref" = "refs/heads/main" ]; then
+            echo "push to main is blocked: use a branch and a PR" >&2
+            exit 1
+          fi
+        done
