@@ -25,10 +25,8 @@ def test_secrets_are_masked_in_repr() -> None:
 
 
 @pytest.mark.usefixtures("fake_env")
-def test_jwt_issuer_is_separate_from_internal_urls() -> None:
-    settings = Settings(_env_file=None)
-
-    assert settings.supabase_jwt_issuer == "http://supabase.test/auth/v1"
+def test_jwt_issuer_is_kept_verbatim() -> None:
+    assert Settings(_env_file=None).supabase_jwt_issuer == "http://supabase.test/auth/v1"
 
 
 def test_missing_jwt_issuer_fails_when_built(
