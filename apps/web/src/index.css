@@ -150,6 +150,8 @@
   --spacing-step-label: 240px;
   --spacing-step-track-lead: 27px;
   --spacing-step-track: 164px;
+  --spacing-step-track-min: 24px;
+  --spacing-step-pitch: 517px;
   --spacing-step-track-trail: 43px;
   --spacing-status-dot: 9px;
   --spacing-status-gap: 9px;
@@ -170,14 +172,6 @@
     outline-offset: var(--focus-offset);
   }
 
-  /* Masked icons paint with a background, which forced colors would drop. */
-  @media (forced-colors: active) {
-    [data-icon] {
-      forced-color-adjust: none;
-      background-color: ButtonText;
-    }
-  }
-
   @media (prefers-reduced-motion: reduce) {
     *,
     ::before,
@@ -185,5 +179,21 @@
       transition-duration: 0.01ms !important;
       animation-duration: 0.01ms !important;
     }
+  }
+}
+
+/* Unlayered on purpose: a layered rule loses to `bg-current` in the utilities layer. Masked icons
+   paint with a background, which forced colors would drop. */
+@media (forced-colors: active) {
+  [data-icon] {
+    forced-color-adjust: none;
+    background-color: ButtonText;
+  }
+}
+
+/* Filled shapes (step circles, brand mark) vanish in forced colors: give them a system border. */
+@utility forced-outline {
+  @media (forced-colors: active) {
+    border: 1px solid ButtonText;
   }
 }

@@ -21,7 +21,7 @@ export function Checklist({ title, items, ...rest }: Props) {
             ) : (
               <span
                 aria-hidden="true"
-                className="size-icon-sm rounded-pill border-2 border-line-track"
+                className="size-icon-sm rounded-pill border-2 border-icon-muted"
               />
             )}
             <span>

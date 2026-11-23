@@ -128,7 +128,7 @@ export default function UiGallery() {
           <Card className="p-card">Card surface, radius and shadow</Card>
           <Avatar initials="AM" label="Adri M." />
           <Avatar initials="AM" label="Adri M." variant="solid" />
-          <span className="inline-flex size-brand-mark items-center justify-center rounded-panel bg-action text-fg-on-action">
+          <span className="inline-flex size-brand-mark forced-outline items-center justify-center rounded-panel bg-action text-fg-on-action">
             <Icon src={cube} />
           </span>
         </div>
@@ -147,10 +147,12 @@ export default function UiGallery() {
       </Section>
       <Section title="Stepper">
         {[0, 1, 2].map((current) => (
-          <div key={current} className="w-max">
-            <Stepper steps={STEPS} current={current} />
-          </div>
+          <Stepper key={current} steps={STEPS} current={current} />
         ))}
+        <p className="text-caption text-fg-muted">In a 750px container (a 1024px window):</p>
+        <div data-testid="stepper-750" className="w-187.5 border border-line">
+          <Stepper steps={STEPS} current={1} />
+        </div>
       </Section>
       <Section title="Checklist">
         <Checklist

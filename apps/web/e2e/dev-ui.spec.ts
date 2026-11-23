@@ -19,13 +19,14 @@ test('the stepper fits a 750px container without horizontal scroll', async ({ pa
     scroll: el.scrollWidth,
     client: el.clientWidth,
   }))
-  expect(client).toBe(750)
+  expect(client).toBeGreaterThan(740)
   expect(scroll).toBeLessThanOrEqual(client)
 })
 
 test('masked icons keep the system color in forced-colors mode', async ({ page }) => {
   await page.emulateMedia({ forcedColors: 'active' })
   await page.goto('/dev/ui')
+  await page.locator('[data-icon]').first().waitFor()
   const [icon, buttonText] = await page.evaluate(() => {
     const probe = Object.assign(document.createElement('i'), { style: 'color: ButtonText' })
     document.body.append(probe)

@@ -10,19 +10,24 @@ export function Breadcrumb({ items, ...rest }: Props) {
         {items.map(({ label, href }, i) => {
           const last = i === items.length - 1
           return (
-            <li key={label} className="flex items-center gap-2">
+            <li
+              key={`${i}-${label}`}
+              className={`flex items-center gap-2 ${last ? 'min-w-0' : 'shrink-0'}`}
+            >
               {href && !last ? (
                 <a href={href} className="rounded-control hover:text-fg">
                   {label}
                 </a>
               ) : (
-                <span aria-current={last ? 'page' : undefined}>{label}</span>
-              )}
-              {!last && (
-                <span aria-hidden="true" data-separator="">
-                  /
+                <span
+                  aria-current={last ? 'page' : undefined}
+                  title={last ? label : undefined}
+                  className="min-w-0 truncate"
+                >
+                  {label}
                 </span>
               )}
+              {!last && <span aria-hidden="true">/</span>}
             </li>
           )
         })}

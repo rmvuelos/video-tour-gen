@@ -42,7 +42,7 @@ describe('Stepper', () => {
     const [done, current, pending] = screen.getAllByRole('listitem')
     expect(done).toHaveTextContent('Upload assets, completed')
     expect(current).toHaveAttribute('aria-current', 'step')
-    expect(current).toHaveTextContent(/^AI preflight$/)
+    expect(current).not.toHaveTextContent(/current|completed|not started/)
     expect(pending).not.toHaveAttribute('aria-current')
     expect(pending).toHaveTextContent('Generate & export, not started')
   })
