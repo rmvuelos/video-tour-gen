@@ -1,1 +1,178 @@
 @import 'tailwindcss';
+
+/* DM Sans (OFL), latin subset with the wght and opsz axes (Figma renders the optical size: the
+   55px heading is 10% narrower than at the default opsz), self-hosted: no third-party request and no dependency, and the
+   visual tests render the same font offline and in CI. */
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('./assets/fonts/dm-sans-latin.woff2') format('woff2');
+}
+
+/* Tokens in three layers: primitives (raw Figma values) -> semantic (roles, the only colors
+   components use) -> component (sizes of a single primitive). Light theme only (D-10): a dark
+   theme overrides the semantic layer and nothing else. Sources: figma-tokens.json. */
+/* Metric-compatible fallback while DM Sans loads (font-display: swap): Arial scaled to DM Sans
+   (measured: 92% of Arial's width, hhea ascent 992 / descent 310 / line gap 0 per 1000 em),
+   so the swap does not shift the layout. */
+@font-face {
+  font-family: 'DM Sans Fallback';
+  src: local('Arial');
+  size-adjust: 92%;
+  ascent-override: 107.83%;
+  descent-override: 33.7%;
+  line-gap-override: 0%;
+}
+
+@theme static {
+  --color-*: initial;
+  --font-sans: 'DM Sans', 'DM Sans Fallback', ui-sans-serif, system-ui, sans-serif;
+
+  /* 1. Primitives: "Caramel light" (6:518) and the neutrals of frame 6:2. */
+  --color-white: #ffffff;
+  --color-ink: #342820;
+  --color-caramel: #b87a59;
+  --color-cream: #f7ebe1;
+  --color-ivory: #fffaf5;
+  --color-taupe: #8d7b71;
+  --color-sage: #597565;
+  --color-mist: #cbdde2;
+  --color-mustard: #dbb166;
+  --color-sand-1: #f1e6db;
+  --color-sand-2: #f1e4d9;
+  --color-sand-3: #f0e3d8;
+  --color-sand-4: #eedfd1;
+  --color-sand-5: #e8d9cd;
+  --color-sand-6: #e7d8cb;
+  --color-sand-7: #e3cab5;
+  --color-sand-8: #dccabc;
+  --color-sand-9: #dac7ba;
+  --color-umber: #886a57;
+  /* taupe and caramel darkened to the minimum that reaches 4.5:1 as text (see tokens.test.ts):
+     taupe-deep on every surface, caramel-deep on the light surfaces. */
+  --color-taupe-deep: #62554f;
+  --color-caramel-deep: #875a41;
+
+  /* 2. Semantic. */
+  --color-canvas: var(--color-cream);
+  --color-surface: var(--color-ivory);
+  --color-surface-subtle: var(--color-sand-3);
+  --color-selected: var(--color-sand-4);
+  --color-tile: var(--color-sand-1);
+  --color-control: var(--color-sand-2);
+  --color-control-hover: color-mix(in srgb, var(--color-sand-2) 90%, var(--color-ink));
+  --color-avatar: var(--color-sand-7);
+  --color-step-idle: var(--color-sand-5);
+  --color-line: var(--color-sand-6);
+  --color-line-track: var(--color-sand-8);
+  --color-line-dashed: var(--color-sand-9);
+  --color-fg: var(--color-ink);
+  --color-fg-muted: var(--color-taupe-deep);
+  --color-fg-accent: var(--color-caramel-deep);
+  --color-fg-on-action: var(--color-white);
+  --color-icon-muted: var(--color-taupe);
+  /* Graphic caramel reaches 3:1 on canvas and surface only: on surface-subtle, selected and tile
+     (2.7 to 2.9) icons use fg-accent. fg-accent is not used on control-hover, avatar or step-idle. */
+  --color-accent: var(--color-caramel);
+  --color-success: var(--color-sage);
+  --color-action: var(--color-ink);
+  --color-action-hover: color-mix(in srgb, var(--color-ink) 85%, var(--color-white));
+  --color-focus: var(--color-ink);
+  --opacity-disabled: 0.5;
+
+  /* Type scale (rem at a 16px root); every line height is 130% and tracking 0 in Figma. */
+  --text-eyebrow: 0.75rem;
+  --text-eyebrow--line-height: 1.3;
+  --text-caption: 0.8125rem;
+  --text-caption--line-height: 1.3;
+  --text-label: 0.875rem;
+  --text-label--line-height: 1.3;
+  --text-body: 0.9375rem;
+  --text-body--line-height: 1.3;
+  --text-nav: 1rem;
+  --text-nav--line-height: 1.3;
+  --text-stage: 1.0625rem;
+  --text-stage--line-height: 1.3;
+  --text-subtitle: 1.125rem;
+  --text-subtitle--line-height: 1.3;
+  --text-lead: 1.1875rem;
+  --text-lead--line-height: 1.3;
+  --text-title-sm: 1.3125rem;
+  --text-title-sm--line-height: 1.3;
+  --text-title: 1.5rem;
+  --text-title--line-height: 1.3;
+  --text-title-lg: 1.625rem;
+  --text-title-lg--line-height: 1.3;
+  --text-brand: 1.8125rem;
+  --text-brand--line-height: 1.3;
+  --text-display: 3.4375rem;
+  --text-display--line-height: 1.3;
+
+  --radius-*: initial;
+  --radius-control: 13px;
+  --radius-panel: 14px;
+  --radius-card: 20px;
+  --radius-card-lg: 22px;
+  --radius-pill: 9999px;
+  --shadow-*: initial;
+  --shadow-card: 0 8px 24px -4px color-mix(in srgb, var(--color-umber) 12%, transparent);
+
+  /* Layout and dashed dropzone border (drawn as 2x10 rectangles in Figma, inset 10px). */
+  --spacing-sidebar: 273px;
+  --spacing-gutter: 61px;
+  --spacing-card: 27px;
+  --spacing-card-gap: 19px;
+  --dash-width: 2px;
+  --dash-length: 10px;
+  --dash-gap: 12px;
+  --dash-inset: 10px;
+  --focus-width: 2px;
+  --focus-offset: 2px;
+
+  /* 3. Component. */
+  --spacing-btn-pill: 42px;
+  --spacing-btn-pill-w: 182px;
+  --spacing-btn-soft: 47px;
+  --spacing-btn-soft-w: 192px;
+  --spacing-btn-cta: 54px;
+  --spacing-btn-cta-gap: 9.5px;
+  --spacing-btn-cta-start: 18px;
+  --spacing-btn-cta-end: 11px;
+  --spacing-icon: 24px;
+  --spacing-btn-cta-gap: 9.5px;
+  --spacing-avatar: 48px;
+  --spacing-avatar-sm: 44px;
+  --spacing-brand-mark: 47px;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-fg);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: var(--focus-width) solid var(--color-focus);
+    outline-offset: var(--focus-offset);
+  }
+
+  /* Masked icons paint with a background, which forced colors would drop. */
+  @media (forced-colors: active) {
+    [data-icon] {
+      forced-color-adjust: none;
+      background-color: ButtonText;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+    }
+  }
+}
