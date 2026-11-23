@@ -1,15 +1,22 @@
+import type { ComponentProps } from 'react'
+
+type Props = Omit<ComponentProps<'span'>, 'children'> & { src: string }
+
 /** Decorative monochrome icon: an SVG used as a mask so it takes `currentColor`. */
-export function Icon({ src, className = '' }: { src: string; className?: string }) {
+export function Icon({ src, className = '', style, ...rest }: Props) {
   return (
     <span
       aria-hidden="true"
-      className={`inline-block shrink-0 bg-current ${className}`}
+      data-icon=""
+      className={`inline-block size-icon shrink-0 bg-current ${className}`}
       style={{
         maskImage: `url("${src}")`,
         maskRepeat: 'no-repeat',
         maskPosition: 'center',
         maskSize: 'contain',
+        ...style,
       }}
+      {...rest}
     />
   )
 }
