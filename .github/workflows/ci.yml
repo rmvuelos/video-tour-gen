@@ -52,6 +52,7 @@ jobs:
       - uses: ./.github/actions/setup-web
       # No VITE_* variables: the build must not need secrets.
       - run: pnpm --filter web build
+      - run: node scripts/check-no-dev-routes.mjs
 
   py-quality:
     timeout-minutes: 15

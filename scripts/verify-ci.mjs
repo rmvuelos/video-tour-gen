@@ -30,7 +30,7 @@ const jobs = [
     ],
   ],
   ['web-test', ['pnpm --filter web test:coverage']],
-  ['web-build', ['pnpm --filter web build']],
+  ['web-build', ['pnpm --filter web build', 'node scripts/check-no-dev-routes.mjs']],
   [
     'py-quality',
     [
