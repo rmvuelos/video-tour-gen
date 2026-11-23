@@ -5,7 +5,10 @@ import process from 'node:process'
 
 const GITLEAKS_IMAGE = 'ghcr.io/gitleaks/gitleaks:v8.30.1'
 const PIP_AUDIT = 'pip-audit==2.10.1'
-const compose = 'docker compose -f infra/docker-compose.yml -f infra/docker-compose.ci.yml'
+// Own project name: the final `down` must not stop the dev stack (`video-tour-gen`).
+// The image name is fixed in docker-compose.yml, so it is shared and not rebuilt.
+const compose =
+  'docker compose -p video-tour-gen-ci -f infra/docker-compose.yml -f infra/docker-compose.ci.yml'
 const backend = `${compose} run --rm backend`
 const cwd = process.cwd()
 
@@ -50,7 +53,7 @@ const jobs = [
   [
     'security',
     [
-      `docker run --rm -v "${cwd}:/repo:ro" -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/repo ${GITLEAKS_IMAGE} git /repo --redact --no-banner`,
+      `docker run --rm -v "${cwd}:/repo:ro" -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/repo ${GITLEAKS_IMAGE} git /repo --redact --no-banner --ignore-gitleaks-allow`,
       'pnpm audit --audit-level high',
       `${backend} sh -c "uv export --frozen --no-emit-project -o /tmp/req.txt >/dev/null && uv tool run ${PIP_AUDIT} -r /tmp/req.txt --disable-pip"`,
     ],
@@ -64,6 +67,13 @@ const jobs = [
     ],
   ],
 ]
+
+// The commits job compares against origin/main: refresh it, but keep going offline.
+function refreshMain() {
+  const { status } = spawnSync('git fetch origin main', { shell: true, stdio: 'ignore' })
+  if (status !== 0)
+    console.warn('warning: git fetch origin main failed; using the local origin/main')
+}
 
 const results = []
 let failed = false
