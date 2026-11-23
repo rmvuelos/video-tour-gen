@@ -1,8 +1,9 @@
+// @vitest-environment node
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-// Read as text: vitest stubs imported CSS files with an empty string.
-const css = readFileSync('src/index.css', 'utf8')
+// Node environment (import.meta.url must be a file URL); read as text because vitest stubs CSS imports.
+const css = readFileSync(new URL('./index.css', import.meta.url), 'utf8')
 const tokens = new Map(
   [...css.matchAll(/--([\w-]+):\s*([^;]+);/g)].map((m) => [m[1], m[2]!.trim()]),
 )
@@ -43,33 +44,48 @@ function contrast(fg: string, bg: string): number {
   return (hi! + 0.05) / (lo! + 0.05)
 }
 
-// Text pairs used by the Figma frames (WCAG AA: 4.5:1 normal text).
-const TEXT_PAIRS: [string, string][] = [
-  ['color-fg', 'color-canvas'],
-  ['color-fg', 'color-surface'],
-  ['color-fg', 'color-control'],
-  ['color-fg', 'color-control-hover'],
-  ['color-fg', 'color-avatar'],
+// Every semantic text color against every semantic surface it can sit on (WCAG AA, 4.5:1).
+// Exceptions are documented in index.css: fg-accent is not used on these surfaces.
+const TEXT_COLORS = ['color-fg', 'color-fg-muted', 'color-fg-accent']
+const SURFACES = [
+  'color-canvas',
+  'color-surface',
+  'color-surface-subtle',
+  'color-selected',
+  'color-tile',
+  'color-control',
+  'color-control-hover',
+  'color-avatar',
+  'color-step-idle',
+]
+const NOT_USED_ON: Record<string, string[]> = {
+  'color-fg-accent': ['color-control-hover', 'color-avatar', 'color-step-idle'],
+}
+const TEXT_PAIRS = TEXT_COLORS.flatMap((fg) =>
+  SURFACES.filter((bg) => !NOT_USED_ON[fg]?.includes(bg)).map((bg): [string, string] => [fg, bg]),
+).concat([
   ['color-fg-on-action', 'color-action'],
   ['color-fg-on-action', 'color-action-hover'],
-  ['color-fg-muted', 'color-canvas'],
-  ['color-fg-muted', 'color-surface'],
-  ['color-fg-muted', 'color-surface-subtle'],
-  ['color-fg-accent', 'color-canvas'],
-  ['color-fg-accent', 'color-surface'],
-  ['color-fg-accent', 'color-surface-subtle'],
-  ['color-fg-accent', 'color-selected'],
-]
+])
+
+// Icons, status dots and the focus ring need 3:1 (WCAG 1.4.11).
+const GRAPHICS = ['color-accent', 'color-success', 'color-icon-muted', 'color-focus']
+const GRAPHIC_SURFACES = ['color-surface', 'color-surface-subtle', 'color-canvas', 'color-selected']
+const GRAPHIC_NOT_USED_ON: Record<string, string[]> = {
+  'color-accent': ['color-surface-subtle', 'color-selected'],
+}
+const GRAPHIC_PAIRS = GRAPHICS.flatMap((fg) =>
+  GRAPHIC_SURFACES.filter((bg) => !GRAPHIC_NOT_USED_ON[fg]?.includes(bg)).map(
+    (bg): [string, string] => [fg, bg],
+  ),
+)
 
 describe('color tokens', () => {
   it.each(TEXT_PAIRS)('%s on %s reaches WCAG AA for text', (fg, bg) => {
     expect(contrast(fg, bg)).toBeGreaterThanOrEqual(4.5)
   })
 
-  it.each([['color-success'], ['color-icon-muted'], ['color-accent'], ['color-focus']])(
-    '%s reaches 3:1 on the canvas (graphics and focus ring)',
-    (fg) => {
-      expect(contrast(fg, 'color-canvas')).toBeGreaterThanOrEqual(3)
-    },
-  )
+  it.each(GRAPHIC_PAIRS)('%s on %s reaches 3:1 for graphics', (fg, bg) => {
+    expect(contrast(fg, bg)).toBeGreaterThanOrEqual(3)
+  })
 })
