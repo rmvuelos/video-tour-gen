@@ -11,6 +11,7 @@ const compose =
   'docker compose -p video-tour-gen-ci -f infra/docker-compose.yml -f infra/docker-compose.ci.yml'
 const backend = `${compose} run --rm backend`
 const cwd = process.cwd()
+const supabase = 'pnpm dlx supabase@3.2.0'
 
 // Same env as the CI; VITE_* is stripped so the web build runs without secrets.
 const env = { CI: '1', IGNORE_LOCAL_ENV: '1' }
@@ -48,6 +49,14 @@ const jobs = [
         ? []
         : ['pnpm --filter web exec playwright install chromium']),
       'pnpm --filter web e2e',
+    ],
+  ],
+  [
+    'db',
+    [
+      `${supabase} start -x studio,realtime,edge-runtime,imgproxy,logflare,vector,postgres-meta,supavisor,mailpit`,
+      `${supabase} db reset`,
+      `${supabase} test db`,
     ],
   ],
   [
@@ -100,8 +109,9 @@ for (const [name, steps] of jobs) {
   }
 }
 
-// Stop the redis container that `compose run` starts as a dependency.
+// Stop what the jobs start: redis (a `compose run` dependency) and the Supabase stack.
 spawnSync(`${compose} down`, { shell: true, stdio: 'ignore' })
+spawnSync(`${supabase} stop --no-backup`, { shell: true, stdio: 'ignore' })
 
 console.log('\n=== summary ===')
 for (const { name, ok, seconds } of results) {
