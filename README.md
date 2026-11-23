@@ -41,7 +41,7 @@ En Windows, Playwright usa el Edge del sistema; en otros sistemas ejecuta antes 
 
 ## Verificación
 
-`pnpm verify:ci` reproduce en local, en orden y parando en el primer fallo, los jobs de `.github/workflows/ci.yml` con el mismo entorno (`CI=1`, `IGNORE_LOCAL_ENV=1`, sin `.env.local` ni `VITE_*`): `web-quality` (eslint, tsc, prettier, knip), `web-test` (vitest con cobertura), `web-build`, `py-quality` y `py-test` (en la imagen Docker del backend), `e2e` (smoke con Playwright), `db` (Supabase local: `db reset` y tests pgTAP con `supabase test db`), `security` (gitleaks sobre todo el historial en Docker, `pnpm audit`, `pip-audit`) y `commits` (commitlint y sin atribución a la IA, contra `origin/main`). Termina con un resumen ✔/✖ y la duración de cada job; con las imágenes ya descargadas tarda cerca de un minuto (más la primera vez). Ejecútalo antes de abrir un PR.
+`pnpm verify:ci` reproduce en local, en orden y parando en el primer fallo, los jobs de `.github/workflows/ci.yml` con el mismo entorno (`CI=1`, `IGNORE_LOCAL_ENV=1`, sin `.env.local` ni `VITE_*`): `web-quality` (eslint, tsc, prettier, knip), `web-test` (vitest con cobertura), `web-build`, `py-quality` y `py-test` (en la imagen Docker del backend), `e2e` (smoke con Playwright), `db` (Supabase local: `db reset`, tests pgTAP con `supabase test db` y los tests `integration` del backend, con tokens reales), `security` (gitleaks sobre todo el historial en Docker, `pnpm audit`, `pip-audit`) y `commits` (commitlint y sin atribución a la IA, contra `origin/main`). Termina con un resumen ✔/✖ y la duración de cada job; con las imágenes ya descargadas tarda cerca de un minuto (más la primera vez). Ejecútalo antes de abrir un PR.
 
 Detalles:
 

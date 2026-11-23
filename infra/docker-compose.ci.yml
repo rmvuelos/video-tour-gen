@@ -4,3 +4,5 @@ services:
     env_file: !reset []
     environment:
       IGNORE_LOCAL_ENV: '1'
+    # Linux runners: reach the Supabase ports published on the host (integration tests).
+    extra_hosts: ['host.docker.internal:host-gateway']

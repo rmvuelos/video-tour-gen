@@ -57,6 +57,7 @@ const jobs = [
       `${supabase} start -x studio,realtime,edge-runtime,imgproxy,logflare,vector,postgres-meta,supavisor,mailpit`,
       `${supabase} db reset`,
       `${supabase} test db`,
+      `node scripts/run-integration.mjs "${supabase}" "${compose}"`,
     ],
   ],
   [
