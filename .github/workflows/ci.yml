@@ -20,9 +20,12 @@ env:
 
 jobs:
   web-quality:
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup-web
       - run: pnpm --filter web lint
       - run: pnpm --filter web typecheck
@@ -30,41 +33,56 @@ jobs:
       - run: pnpm exec knip
 
   web-test:
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup-web
       - run: pnpm --filter web test:coverage
 
   web-build:
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup-web
       # No VITE_* variables: the build must not need secrets.
       - run: pnpm --filter web build
 
   py-quality:
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - run: docker compose build backend
       - run: docker compose run --rm backend ruff check .
       - run: docker compose run --rm backend ruff format --check .
       - run: docker compose run --rm backend mypy
 
   py-test:
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - run: docker compose build backend
       - run: docker compose run --rm backend pytest --cov-fail-under=80
 
   # Smoke against the production build. Supabase, api and worker join in phase 3, when tests need them.
   e2e:
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup-web
       - run: pnpm --filter web exec playwright install --with-deps chromium
       - run: pnpm --filter web e2e
@@ -78,17 +96,19 @@ jobs:
           if-no-files-found: ignore
 
   security:
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0
       - uses: ./.github/actions/setup-web
       - name: gitleaks (full history)
         run: >
           docker run --rm -v "$PWD:/repo:ro"
           -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/repo
-          "$GITLEAKS_IMAGE" git /repo --redact --no-banner
+          "$GITLEAKS_IMAGE" git /repo --redact --no-banner --ignore-gitleaks-allow
       - run: pnpm audit --audit-level high
       - run: docker compose build backend
       - name: pip-audit
@@ -98,6 +118,7 @@ jobs:
           && uv tool run pip-audit==2.10.1 -r /tmp/req.txt --disable-pip'
 
   commits:
+    timeout-minutes: 15
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     env:
@@ -106,6 +127,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0
       - uses: ./.github/actions/setup-web
       - run: pnpm exec commitlint --from "$BASE_SHA" --to "$HEAD_SHA"
