@@ -1,11 +1,13 @@
+import unicodedata
 from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
+import psycopg
 from fastapi import APIRouter, Query
-from pydantic import BaseModel, ConfigDict, StringConstraints
+from pydantic import AfterValidator, BaseModel, ConfigDict, StringConstraints
 
-from app.auth import CurrentUserDep
+from app.auth import CurrentUserDep, unauthorized
 from app.db import PoolDep, connection
 from app.errors import ApiError
 
@@ -23,17 +25,30 @@ LIST = (
 SELECT_ONE = f"select {COLUMNS} from projects where id = %s and user_id = %s"
 
 
+FORBIDDEN_CATEGORIES = {"Cc", "Cf", "Cs"}  # control, format (zero-width, bidi), surrogates
+
+
+def _printable(value: str) -> str:
+    if any(unicodedata.category(c) in FORBIDDEN_CATEGORIES for c in value):
+        raise ValueError("must not contain control or invisible characters")
+    return value
+
+
 class ProjectIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
+    name: Annotated[
+        str,
+        StringConstraints(strip_whitespace=True, min_length=1, max_length=120),
+        AfterValidator(_printable),
+    ]
 
 
 class Project(BaseModel):
     id: UUID
     name: str
     status: str
-    area_m2: float | None
+    area_m2: float | None  # m2 needs no decimal precision; Decimal would serialise as a string
     description: str | None
     created_at: datetime
     updated_at: datetime
@@ -52,7 +67,10 @@ def _not_found() -> ApiError:
 @router.post("", status_code=201)
 def create_project(body: ProjectIn, user: CurrentUserDep, pool: PoolDep) -> Project:
     with connection(pool) as conn:
-        row = conn.execute(INSERT, (user.id, body.name)).fetchone()
+        try:
+            row = conn.execute(INSERT, (user.id, body.name)).fetchone()
+        except psycopg.errors.ForeignKeyViolation:  # user deleted, token still valid
+            raise unauthorized() from None
     return Project.model_validate(row)
 
 
@@ -61,7 +79,7 @@ def list_projects(
     user: CurrentUserDep,
     pool: PoolDep,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
-    offset: Annotated[int, Query(ge=0)] = 0,
+    offset: Annotated[int, Query(ge=0, le=10_000)] = 0,
 ) -> ProjectPage:
     with connection(pool) as conn:
         rows = conn.execute(LIST, (user.id, limit, offset)).fetchall()

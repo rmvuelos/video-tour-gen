@@ -12,6 +12,7 @@ from psycopg_pool import PoolClosed, PoolTimeout
 from app.api import app
 from app.auth import CurrentUser, current_user
 from app.db import get_pool
+from app.projects import ProjectIn
 
 USER = CurrentUser(id=uuid.uuid4(), email="ana@example.test")
 NOW = datetime(2026, 1, 1, tzinfo=UTC)
@@ -93,9 +94,8 @@ def test_create_stores_trimmed_name_for_the_current_user(
     "body",
     [{}, {"name": ""}, {"name": "   "}, {"name": "x" * 121}, {"name": 1}, {"name": None},
      {"name": "ok", "user_id": str(uuid.uuid4())},
-     # Unicode categories Cc, Cf, Cs: NUL, newline, zero-width, bidi override, lone surrogate
-     {"name": "\u0000"}, {"name": "a\nb"}, {"name": "a​b"}, {"name": "‮name"},
-     {"name": "\ud800"}],
+     # Unicode categories Cc, Cf, Cs: NUL, newline, zero-width, bidi override
+     {"name": "\u0000"}, {"name": "a\nb"}, {"name": "a\u200bb"}, {"name": "\u202ename"}],
 )  # fmt: skip
 def test_create_rejects_invalid_body_without_touching_the_db(
     client: TestClient, pool: FakePool, body: dict[str, Any]
@@ -199,3 +199,9 @@ def test_create_for_a_deleted_user_with_a_live_token_is_401(
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "unauthorized"
     assert response.headers["www-authenticate"] == "Bearer"
+
+
+def test_name_with_a_lone_surrogate_is_rejected() -> None:
+    # The HTTP client cannot encode it, so it is covered at the model level.
+    with pytest.raises(ValueError):
+        ProjectIn(name="\ud800")

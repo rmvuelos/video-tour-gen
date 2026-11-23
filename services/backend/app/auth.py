@@ -26,7 +26,7 @@ class CurrentUser:
     email: str | None
 
 
-def _unauthorized() -> ApiError:
+def unauthorized() -> ApiError:
     return ApiError(
         401, "unauthorized", "Invalid or missing credentials.", {"WWW-Authenticate": "Bearer"}
     )
@@ -47,11 +47,11 @@ def _signing_key(token: str) -> Any:
     except jwt.PyJWKClientError as exc:
         # PyJWT gives no own type for "unknown kid" vs "bad JWKS": only the message differs.
         if str(exc).startswith(UNKNOWN_KID_PREFIX):
-            raise _unauthorized() from exc
+            raise unauthorized() from exc
         raise _unavailable(exc) from exc
     except jwt.PyJWTError as exc:  # malformed token header
         logger.info("token rejected: %s", type(exc).__name__)
-        raise _unauthorized() from exc
+        raise unauthorized() from exc
 
 
 def _unavailable(exc: Exception) -> ApiError:
@@ -63,7 +63,7 @@ def _unavailable(exc: Exception) -> ApiError:
 def current_user(authorization: Annotated[str | None, Header()] = None) -> CurrentUser:
     parts = (authorization or "").split(" ")
     if len(parts) != 2 or parts[0].lower() != "bearer" or not parts[1]:
-        raise _unauthorized()
+        raise unauthorized()
     token = parts[1]
     key = _signing_key(token)
     try:
@@ -82,7 +82,7 @@ def current_user(authorization: Annotated[str | None, Header()] = None) -> Curre
         return CurrentUser(id=UUID(claims["sub"]), email=email if isinstance(email, str) else None)
     except (jwt.PyJWTError, ValueError, TypeError) as exc:
         logger.info("token rejected: %s", type(exc).__name__)
-        raise _unauthorized() from exc
+        raise unauthorized() from exc
 
 
 CurrentUserDep = Annotated[CurrentUser, Depends(current_user)]
