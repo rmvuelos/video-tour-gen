@@ -7,7 +7,7 @@ from typing import Any
 import psycopg
 import pytest
 from fastapi.testclient import TestClient
-from psycopg_pool import PoolTimeout
+from psycopg_pool import PoolClosed, PoolTimeout
 
 from app.api import app
 from app.auth import CurrentUser, current_user
@@ -92,7 +92,10 @@ def test_create_stores_trimmed_name_for_the_current_user(
 @pytest.mark.parametrize(
     "body",
     [{}, {"name": ""}, {"name": "   "}, {"name": "x" * 121}, {"name": 1}, {"name": None},
-     {"name": "ok", "user_id": str(uuid.uuid4())}],
+     {"name": "ok", "user_id": str(uuid.uuid4())},
+     # Unicode categories Cc, Cf, Cs: NUL, newline, zero-width, bidi override, lone surrogate
+     {"name": "\u0000"}, {"name": "a\nb"}, {"name": "a​b"}, {"name": "‮name"},
+     {"name": "\ud800"}],
 )  # fmt: skip
 def test_create_rejects_invalid_body_without_touching_the_db(
     client: TestClient, pool: FakePool, body: dict[str, Any]
@@ -104,7 +107,7 @@ def test_create_rejects_invalid_body_without_touching_the_db(
     assert pool.calls == []
 
 
-@pytest.mark.parametrize("query", ["limit=0", "limit=101", "limit=x", "offset=-1"])
+@pytest.mark.parametrize("query", ["limit=0", "limit=101", "limit=x", "offset=-1", "offset=10001"])
 def test_list_rejects_invalid_pagination(client: TestClient, query: str) -> None:
     response = client.get(f"/projects?{query}")
 
@@ -162,6 +165,7 @@ def test_endpoints_require_a_token(fake_env: None, path: str) -> None:
     ("where", "error"),
     [
         ("connect_error", PoolTimeout("no connection")),
+        ("connect_error", PoolClosed("pool closed")),
         ("execute_error", psycopg.OperationalError("server closed the connection")),
     ],
 )
@@ -183,3 +187,15 @@ def test_unexpected_db_error_is_500_without_details(client: TestClient, pool: Fa
     assert response.json() == {
         "error": {"code": "internal_error", "message": "Something went wrong."}
     }
+
+
+def test_create_for_a_deleted_user_with_a_live_token_is_401(
+    client: TestClient, pool: FakePool
+) -> None:
+    pool.execute_error = psycopg.errors.ForeignKeyViolation("user_id is not in auth.users")
+
+    response = client.post("/projects", json={"name": "Casa"})
+
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "unauthorized"
+    assert response.headers["www-authenticate"] == "Bearer"
