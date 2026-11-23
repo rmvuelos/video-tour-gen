@@ -17,11 +17,13 @@
     "format:check": "prettier --check . && docker compose -f infra/docker-compose.yml run --rm backend ruff format --check .",
     "test": "pnpm --filter web test && docker compose -f infra/docker-compose.yml run --rm backend pytest",
     "e2e": "pnpm --filter web e2e",
+    "verify:ci": "node scripts/verify-ci.mjs",
     "prepare": "lefthook install"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.4",
     "@commitlint/config-conventional": "^21.2.4",
+    "knip": "^6.46.1",
     "lefthook": "^2.2.2",
     "prettier": "^3.10.1"
   }
