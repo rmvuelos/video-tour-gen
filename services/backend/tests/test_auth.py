@@ -168,7 +168,7 @@ def test_unreachable_jwks_is_503(
     client: TestClient, key: ec.EllipticCurvePrivateKey, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     def boom(self: PyJWKClient) -> dict[str, Any]:
-        raise OSError("connection refused")
+        raise jwt.PyJWKClientConnectionError("connection refused")
 
     monkeypatch.setattr(PyJWKClient, "fetch_data", boom)
 
