@@ -22,10 +22,15 @@ describe('Breadcrumb', () => {
   })
 
   it('hides the separators from assistive technology', () => {
-    const { container } = render(<Breadcrumb items={items} />)
-    const separators = container.querySelectorAll('[data-separator]')
+    render(<Breadcrumb items={items} />)
+    const separators = screen.getAllByText('/')
     expect(separators).toHaveLength(2)
     separators.forEach((s) => expect(s).toHaveAttribute('aria-hidden', 'true'))
+  })
+
+  it('keeps the full label in a title when the current page is truncated', () => {
+    render(<Breadcrumb items={items} />)
+    expect(screen.getByText('Arles bedroom')).toHaveAttribute('title', 'Arles bedroom')
   })
 })
 
@@ -37,32 +42,42 @@ describe('Stepper', () => {
     const [done, current, pending] = screen.getAllByRole('listitem')
     expect(done).toHaveTextContent('Upload assets, completed')
     expect(current).toHaveAttribute('aria-current', 'step')
-    expect(current).toHaveTextContent('AI preflight, current step')
+    expect(current).toHaveTextContent(/^AI preflight$/)
     expect(pending).not.toHaveAttribute('aria-current')
     expect(pending).toHaveTextContent('Generate & export, not started')
   })
 
-  it('is an ordered list', () => {
+  it('is a labelled ordered list', () => {
     render(<Stepper steps={steps} current={0} />)
-    expect(screen.getByRole('list').tagName).toBe('OL')
+    expect(screen.getByRole('list', { name: 'Progress' }).tagName).toBe('OL')
   })
 })
 
 describe('SaveStatus', () => {
-  it('is a polite live region that announces each state change', () => {
-    const { rerender } = render(<SaveStatus status="saved" />)
+  it('announces saved politely and keeps the status region mounted', () => {
+    const { rerender } = render(<SaveStatus status="saving" />)
     const region = screen.getByRole('status')
-    expect(region).toHaveTextContent('All changes saved')
-    rerender(<SaveStatus status="saving" />)
+    expect(region).toBeEmptyDOMElement()
+    rerender(<SaveStatus status="saved" />)
     expect(screen.getByRole('status')).toBe(region)
-    expect(region).toHaveTextContent('Saving changes')
-    rerender(<SaveStatus status="error" />)
-    expect(region).toHaveTextContent('Could not save changes')
+    expect(region).toHaveTextContent('All changes saved')
   })
 
-  it('keeps the dot decorative', () => {
-    const { container } = render(<SaveStatus status="saved" />)
-    expect(container.querySelector('[data-dot]')).toHaveAttribute('aria-hidden', 'true')
+  it('does not announce saving but still shows it', () => {
+    render(<SaveStatus status="saving" />)
+    expect(screen.getByRole('status')).toBeEmptyDOMElement()
+    expect(screen.getByRole('alert')).toBeEmptyDOMElement()
+    expect(screen.getByText('Saving changes')).toBeVisible()
+  })
+
+  it('announces an error assertively through its own alert node', () => {
+    const { rerender } = render(<SaveStatus status="saved" />)
+    const alert = screen.getByRole('alert')
+    expect(alert).toBeEmptyDOMElement()
+    rerender(<SaveStatus status="error" />)
+    expect(screen.getByRole('alert')).toBe(alert)
+    expect(alert).toHaveTextContent('Could not save changes')
+    expect(screen.getByRole('status')).toBeEmptyDOMElement()
   })
 })
 
