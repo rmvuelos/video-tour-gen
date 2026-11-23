@@ -43,17 +43,25 @@ def client(
     auth.get_jwk_client.cache_clear()
 
 
-def _token(key: ec.EllipticCurvePrivateKey, kid: str = KID, **overrides: Any) -> str:
+def _token(
+    key: ec.EllipticCurvePrivateKey,
+    kid: str = KID,
+    alg: str = "ES256",
+    headers: dict[str, Any] | None = None,
+    **overrides: Any,
+) -> str:
     now = int(time.time())
     claims: dict[str, Any] = {
         "sub": USER_ID,
         "email": "ana@example.test",
         "aud": "authenticated",
         "iss": ISSUER,
+        "role": "authenticated",
+        "iat": now,
         "exp": now + 300,
     }
     claims = {k: v for k, v in {**claims, **overrides}.items() if v is not None}
-    return jwt.encode(claims, key, algorithm="ES256", headers={"kid": kid})
+    return jwt.encode(claims, key, algorithm=alg, headers={"kid": kid, **(headers or {})})
 
 
 def _b64(data: bytes) -> str:
@@ -124,13 +132,75 @@ def test_empty_bearer_is_401(client: TestClient) -> None:
         {"sub": None},
         {"aud": None},
         {"iss": None},
+        {"role": "anon"},
+        {"role": "service_role"},
+        {"role": None},
+        {"iat": None},
+        {"is_anonymous": True},
+        {"nbf": int(time.time()) + 3600},
+        {"iat": int(time.time()) + 3600},
+        {"exp": int(time.time()) - 30},
     ],
-    ids=["expired", "aud", "iss", "sub-not-uuid", "no-exp", "no-sub", "no-aud", "no-iss"],
+    ids=[
+        "expired", "aud", "iss", "sub-not-uuid", "no-exp", "no-sub", "no-aud", "no-iss",
+        "role-anon", "role-service", "no-role", "no-iat", "is-anonymous", "nbf-future",
+        "iat-future", "past-leeway",
+    ],
 )
 def test_bad_claims_are_401(
     client: TestClient, key: ec.EllipticCurvePrivateKey, overrides: dict[str, Any]
 ) -> None:
     _assert_unauthorized(_get(client, _token(key, **overrides)))
+
+
+def test_exp_within_leeway_passes(client: TestClient, key: ec.EllipticCurvePrivateKey) -> None:
+    assert _get(client, _token(key, exp=int(time.time()) - 5)).status_code == 200
+
+
+def test_non_anonymous_flag_passes(client: TestClient, key: ec.EllipticCurvePrivateKey) -> None:
+    assert _get(client, _token(key, is_anonymous=False)).status_code == 200
+
+
+def test_es384_token_with_known_kid_is_401(client: TestClient) -> None:
+    other = ec.generate_private_key(ec.SECP384R1())
+
+    _assert_unauthorized(_get(client, _token(other, alg="ES384")))
+
+
+def test_bearer_with_extra_part_is_401(client: TestClient, key: ec.EllipticCurvePrivateKey) -> None:
+    _assert_unauthorized(client.get("/me", headers={"Authorization": f"Bearer {_token(key)} a"}))
+
+
+def test_jku_and_x5u_headers_are_ignored(
+    client: TestClient, key: ec.EllipticCurvePrivateKey, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    uris: list[str] = []
+
+    def fetch(self: PyJWKClient) -> dict[str, Any]:
+        uris.append(self.uri)
+        return _jwks(key)
+
+    monkeypatch.setattr(PyJWKClient, "fetch_data", fetch)
+    headers = {"jku": "http://evil.test/jwks", "x5u": "http://evil.test/cert"}
+
+    assert _get(client, _token(key, headers=headers)).status_code == 200
+    assert uris == ["http://supabase.test/jwks"]
+
+
+def test_unknown_kid_floods_cause_at_most_two_fetches(
+    client: TestClient, key: ec.EllipticCurvePrivateKey, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[int] = []
+
+    def fetch(self: PyJWKClient) -> dict[str, Any]:
+        calls.append(1)
+        return _jwks(key)
+
+    monkeypatch.setattr(PyJWKClient, "fetch_data", fetch)
+    for _ in range(10):
+        _assert_unauthorized(_get(client, _token(key, kid="nope")))
+
+    assert len(calls) <= 2
 
 
 def test_other_key_with_known_kid_is_401(client: TestClient) -> None:
@@ -164,19 +234,52 @@ def test_garbage_token_is_401(client: TestClient) -> None:
     _assert_unauthorized(_get(client, "not.a.jwt"))
 
 
-def test_unreachable_jwks_is_503(
-    client: TestClient, key: ec.EllipticCurvePrivateKey, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    def boom(self: PyJWKClient) -> dict[str, Any]:
-        raise jwt.PyJWKClientConnectionError("connection refused")
-
-    monkeypatch.setattr(PyJWKClient, "fetch_data", boom)
-
-    response = _get(client, _token(key))
-
+def _assert_unavailable(response: Any, secret: str) -> None:
     assert response.status_code == 503
+    assert "www-authenticate" not in response.headers
     assert response.json()["error"]["code"] == "auth_unavailable"
-    assert "connection refused" not in response.text
+    assert secret not in response.text
+
+
+def _broken_fetch(exc: Exception) -> Any:
+    def fetch(self: PyJWKClient) -> dict[str, Any]:
+        raise exc
+
+    return fetch
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        jwt.PyJWKClientConnectionError("connection refused"),
+        json.JSONDecodeError("bad json", "{", 0),
+    ],
+    ids=["unreachable", "invalid-json"],
+)
+def test_jwks_failures_are_503(
+    client: TestClient,
+    key: ec.EllipticCurvePrivateKey,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    exc: Exception,
+) -> None:
+    monkeypatch.setattr(PyJWKClient, "fetch_data", _broken_fetch(exc))
+    token = _token(key)
+
+    with caplog.at_level(logging.DEBUG):
+        response = _get(client, token)
+
+    _assert_unavailable(response, "connection refused")
+    assert token not in caplog.text
+
+
+@pytest.mark.parametrize("jwks", [{"keys": []}, {"keys": [{"kty": "oct"}]}, []])
+def test_jwks_without_signing_keys_is_503(
+    client: TestClient, key: ec.EllipticCurvePrivateKey, monkeypatch: pytest.MonkeyPatch, jwks: Any
+) -> None:
+    monkeypatch.setattr(PyJWKClient, "fetch_data", lambda self: jwks)
+
+    _assert_unavailable(_get(client, _token(key)), "keys")
 
 
 def test_jwk_client_is_lazy_and_cached(fake_env: None) -> None:

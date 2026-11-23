@@ -37,3 +37,13 @@ def test_missing_jwt_issuer_fails_when_built(
     monkeypatch.delenv("SUPABASE_JWT_ISSUER")
     with pytest.raises(ValidationError):
         Settings(_env_file=None)
+
+
+@pytest.mark.parametrize("name", ["SUPABASE_JWKS_URL", "SUPABASE_JWT_ISSUER"])
+@pytest.mark.parametrize("value", ["", "not-a-url", "ftp://supabase.test/x", "file:///etc/passwd"])
+def test_auth_urls_must_be_http(
+    monkeypatch: pytest.MonkeyPatch, fake_env: None, name: str, value: str
+) -> None:
+    monkeypatch.setenv(name, value)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
