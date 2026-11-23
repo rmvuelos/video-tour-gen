@@ -60,7 +60,7 @@ describe('Sidebar', () => {
 
 describe('Coming soon tooltip', () => {
   const item = () => screen.getByRole('button', { name: /Templates/ })
-  const tooltip = () => screen.getByRole('tooltip', { hidden: true })
+  const tooltip = () => document.getElementById(item().getAttribute('aria-describedby')!)!
 
   it('is described by the item and hidden until hover or focus', () => {
     setup()
