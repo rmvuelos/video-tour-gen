@@ -138,12 +138,11 @@
   --spacing-btn-soft-w: 192px;
   --spacing-btn-cta: 54px;
   --spacing-btn-cta-gap: 9.5px;
-  --spacing-btn-cta-start: 18px;
-  --spacing-btn-cta-end: 11px;
+  --spacing-btn-cta-start: 16px;
+  --spacing-btn-cta-end: 9px;
   --spacing-icon: 24px;
-  --spacing-btn-cta-gap: 9.5px;
-  --spacing-avatar: 48px;
-  --spacing-avatar-sm: 44px;
+  --spacing-avatar: 3rem;
+  --spacing-avatar-sm: 2.75rem;
   --spacing-brand-mark: 47px;
 }
 
