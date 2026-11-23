@@ -14,7 +14,7 @@ export function SaveStatus({ status, className = '', ...rest }: Props) {
   return (
     <div
       role="status"
-      className={`flex items-center gap-2 text-label font-medium text-fg-muted ${className}`}
+      className={`flex items-center gap-status-gap text-label font-medium text-fg-muted ${className}`}
       {...rest}
     >
       <span aria-hidden="true" data-dot="" className={`size-status-dot rounded-pill ${dot}`} />

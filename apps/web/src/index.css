@@ -50,7 +50,7 @@
   --color-sand-8: #dccabc;
   --color-sand-9: #dac7ba;
   --color-umber: #886a57;
-  /* Not in Figma (it has no error state): derived, 6:1 on canvas and surface. */
+  /* Derived, not Figma (no error state in the file): 6:1 on canvas and surface. */
   --color-brick: #a3412e;
   /* taupe and caramel darkened to the minimum that reaches 4.5:1 as text (see tokens.test.ts):
      taupe-deep on every surface, caramel-deep on the light surfaces. */
@@ -144,9 +144,15 @@
   --spacing-btn-cta-start: 16px;
   --spacing-btn-cta-end: 9px;
   --spacing-icon: 24px;
+  --spacing-icon-sm: 20px;
   --spacing-step: 30px;
+  --spacing-step-gap: 13px;
+  --spacing-step-label: 240px;
+  --spacing-step-track-lead: 27px;
   --spacing-step-track: 164px;
+  --spacing-step-track-trail: 43px;
   --spacing-status-dot: 9px;
+  --spacing-status-gap: 9px;
   --spacing-avatar: 3rem;
   --spacing-avatar-sm: 2.75rem;
   --spacing-brand-mark: 47px;

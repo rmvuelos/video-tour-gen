@@ -13,15 +13,15 @@ export function Checklist({ title, items, ...rest }: Props) {
   return (
     <div {...rest}>
       <Eyebrow id={id}>{title}</Eyebrow>
-      <ul aria-labelledby={id} className="mt-3 flex flex-col gap-2">
+      <ul aria-labelledby={id} className="mt-3 flex flex-col gap-3.5">
         {items.map(({ label, done }) => (
           <li key={label} className="flex items-center gap-3 text-body font-medium">
             {done ? (
-              <Icon src={check} className="text-success" />
+              <Icon src={check} size="sm" className="text-success" />
             ) : (
               <span
                 aria-hidden="true"
-                className="size-icon rounded-pill border-2 border-line-track"
+                className="size-icon-sm rounded-pill border-2 border-line-track"
               />
             )}
             <span>
