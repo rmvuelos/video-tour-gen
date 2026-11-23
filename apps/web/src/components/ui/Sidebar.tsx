@@ -33,12 +33,20 @@ const LIBRARY = [
  * screen reader users reach the item and hear "Coming soon" (a `disabled` button is skipped). The
  * tooltip sits inside the wrapper with its gap as padding, so the pointer can cross onto it.
  */
-function ComingSoon({ className = '', children }: { className?: string; children: ReactNode }) {
+function ComingSoon({
+  className = '',
+  wrapClassName = '',
+  children,
+}: {
+  className?: string
+  wrapClassName?: string
+  children: ReactNode
+}) {
   const id = useId()
   const [shown, setShown] = useState(false)
   return (
     <span
-      className="relative block"
+      className={`relative block ${wrapClassName}`}
       onMouseEnter={() => setShown(true)}
       onMouseLeave={() => setShown(false)}
       onFocus={() => setShown(true)}
@@ -100,10 +108,10 @@ export function Sidebar({ current, hrefs, user, onNavigate, className = '', ...r
   )
   return (
     <aside
-      className={`flex w-sidebar flex-col bg-surface px-5.75 pt-8 pb-13.5 ${className}`}
+      className={`flex w-sidebar flex-col bg-surface pr-5.25 pl-5.75 pt-8 pb-13.5 ${className}`}
       {...rest}
     >
-      <div className="flex items-center gap-3.5">
+      <div className="flex items-center gap-3.5 px-2.75">
         <span className="inline-flex size-brand-mark items-center justify-center rounded-panel bg-action text-fg-on-action">
           <Icon src={cube} />
         </span>
@@ -112,7 +120,7 @@ export function Sidebar({ current, hrefs, user, onNavigate, className = '', ...r
       <Eyebrow tone="accent" className="mt-7.5 px-3">
         Spatial AI studio
       </Eyebrow>
-      <div aria-hidden="true" className="mx-2.25 mt-5 h-px bg-line" />
+      <div aria-hidden="true" className="ml-2.25 mr-3 mt-5 h-px bg-line" />
       <nav aria-label="Main">
         <Eyebrow className="mt-10 block px-3">Workspace</Eyebrow>
         <Eyebrow id={createId} className="mt-8 block px-3">
@@ -154,13 +162,16 @@ export function Sidebar({ current, hrefs, user, onNavigate, className = '', ...r
           })}
         </ul>
       </nav>
-      <ComingSoon className="mt-auto h-plan-card flex-col items-start justify-center gap-1 rounded-panel bg-surface-subtle px-4.75">
+      <ComingSoon
+        wrapClassName="mt-auto"
+        className="h-plan-card flex-col items-start justify-start gap-1.5 rounded-panel bg-surface-subtle px-4.75 pt-5.5"
+      >
         <Eyebrow tone="accent">Your plan</Eyebrow>
         <span className="text-subtitle font-semibold text-fg">Studio / Free</span>
-        <span className="text-caption">2 of 5 projects used</span>
+        <span className="mt-1 text-caption">2 of 5 projects used</span>
       </ComingSoon>
-      <div aria-hidden="true" className="mx-2.25 mt-7 h-px bg-line" />
-      <div className="mt-6.5 flex items-center gap-3 px-2.25">
+      <div aria-hidden="true" className="ml-2.25 mr-3 mt-7 h-px bg-line" />
+      <div className="mt-6.5 flex items-center gap-3 px-3.25">
         <Avatar initials={user.initials} />
         <div className="flex flex-col">
           <span className="text-stage font-semibold">{user.name}</span>
