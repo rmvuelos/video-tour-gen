@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 
-/* DM Sans (OFL), latin subset, self-hosted: no third-party request and no dependency, and the
+/* DM Sans (OFL), latin subset with the wght and opsz axes (Figma renders the optical size: the
+   55px heading is 10% narrower than at the default opsz), self-hosted: no third-party request and no dependency, and the
    visual tests render the same font offline and in CI. */
 @font-face {
   font-family: 'DM Sans';
@@ -119,6 +120,7 @@
   --spacing-btn-soft: 47px;
   --spacing-btn-soft-w: 192px;
   --spacing-btn-cta: 54px;
+  --spacing-btn-cta-gap: 9.5px;
   --spacing-avatar: 48px;
   --spacing-avatar-sm: 44px;
   --spacing-brand-mark: 47px;
