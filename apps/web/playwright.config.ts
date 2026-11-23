@@ -10,7 +10,7 @@ export default defineConfig({
     channel: process.platform === 'win32' ? 'msedge' : undefined,
   },
   webServer: {
-    command: `pnpm build && pnpm preview --host 127.0.0.1 --port ${PORT} --strictPort`,
+    command: `pnpm build --mode e2e && pnpm preview --host 127.0.0.1 --port ${PORT} --strictPort`,
     url: `http://127.0.0.1:${PORT}`,
     reuseExistingServer: !process.env['CI'],
     timeout: 120_000,
