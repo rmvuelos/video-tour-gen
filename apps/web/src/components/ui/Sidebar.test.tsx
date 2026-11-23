@@ -1,11 +1,11 @@
-import { render, screen, within } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { Sidebar } from './Sidebar'
 
 const HREFS = { upload: '/upload', projects: '/projects' }
 const USER = { name: 'Adri M.', initials: 'AM' }
-const DISABLED = ['AI preflight', '3D generation', 'Templates', 'Preferences', 'Your plan']
+const DISABLED = ['AI preflight', '3D generation', 'Templates', 'Preferences']
 
 function setup(current: 'upload' | 'projects' = 'upload') {
   const onNavigate = vi.fn((_id: string, e: { preventDefault: () => void }) => e.preventDefault())
@@ -80,14 +80,41 @@ describe('Coming soon tooltip', () => {
 
   it('shows on keyboard focus and Escape dismisses it', async () => {
     const { user } = setup()
-    await user.tab()
-    await user.tab()
-    await user.tab()
-    await user.tab()
-    await user.tab()
-    expect(item()).toHaveFocus()
+    act(() => item().focus())
     expect(tooltip()).toBeVisible()
     await user.keyboard('{Escape}')
     expect(tooltip()).not.toBeVisible()
+  })
+
+  it('Escape dismisses a tooltip opened by hover alone, without focus', async () => {
+    const { user } = setup()
+    await user.hover(item())
+    expect(item()).not.toHaveFocus()
+    expect(tooltip()).toBeVisible()
+    await user.keyboard('{Escape}')
+    expect(tooltip()).not.toBeVisible()
+  })
+
+  it('stays visible while focus remains after the pointer leaves', async () => {
+    const { user } = setup()
+    act(() => item().focus())
+    await user.hover(item())
+    await user.unhover(item())
+    expect(tooltip()).toBeVisible()
+  })
+})
+
+describe('Plan card and decorative parts', () => {
+  it('shows the plan as plain text: not a button, not focusable', () => {
+    setup()
+    expect(screen.getByText('Studio / Free')).toBeVisible()
+    expect(screen.queryByRole('button', { name: /Your plan/ })).not.toBeInTheDocument()
+  })
+
+  it('hides the step numbers and the avatar initials from assistive technology', () => {
+    setup()
+    expect(screen.getByRole('link', { name: 'Upload assets' })).toBeInTheDocument()
+    expect(screen.getByText('AM')).toHaveAttribute('aria-hidden', 'true')
+    expect(screen.getByText('01')).toHaveAttribute('aria-hidden', 'true')
   })
 })
