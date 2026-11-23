@@ -147,5 +147,8 @@ jobs:
       - run: supabase start -x studio,realtime,edge-runtime,imgproxy,logflare,vector,postgres-meta,supavisor,mailpit
       - run: supabase db reset
       - run: supabase test db
+      - run: docker compose build backend
+      # Reads the local keys from `supabase status` and passes them as env: nothing is written to disk.
+      - run: node scripts/run-integration.mjs supabase "docker compose"
       - run: supabase stop --no-backup
         if: always()
