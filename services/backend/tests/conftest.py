@@ -7,6 +7,7 @@ from app.settings import get_settings
 FAKE_ENV = {
     "SUPABASE_URL": "http://supabase.test",
     "SUPABASE_JWKS_URL": "http://supabase.test/jwks",
+    "SUPABASE_JWT_ISSUER": "http://supabase.test/auth/v1",
     "SUPABASE_SECRET_KEY": "test-secret",
     "REDIS_URL": "redis://redis.test:6379/0",
     "DATABASE_URL": "postgresql://user:test-pass@db.test/db",

@@ -6,6 +6,7 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "celery>=5.7.0",
     "fastapi>=0.165.0",
+    "pyjwt[crypto]>=2.10",
     "packaging>=24",  # kombu 5.7.0 imports it (kombu.transport.redis) but does not declare it
     "pydantic-settings>=2.16",
     "redis>=8.1.0",
