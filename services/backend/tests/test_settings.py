@@ -22,3 +22,18 @@ def test_secrets_are_masked_in_repr() -> None:
     assert "test-secret" not in repr(settings)
     assert "test-pass" not in repr(settings)
     assert settings.supabase_secret_key.get_secret_value() == "test-secret"
+
+
+@pytest.mark.usefixtures("fake_env")
+def test_jwt_issuer_is_separate_from_internal_urls() -> None:
+    settings = Settings(_env_file=None)
+
+    assert settings.supabase_jwt_issuer == "http://supabase.test/auth/v1"
+
+
+def test_missing_jwt_issuer_fails_when_built(
+    monkeypatch: pytest.MonkeyPatch, fake_env: None
+) -> None:
+    monkeypatch.delenv("SUPABASE_JWT_ISSUER")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
