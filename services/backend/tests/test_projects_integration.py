@@ -4,6 +4,7 @@ import os
 import uuid
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
+from urllib.parse import urlparse
 
 import httpx2 as httpx
 import pytest
@@ -21,12 +22,9 @@ REQUIRED_ENV = [
     "SUPABASE_SECRET_KEY",
     "SUPABASE_PUBLISHABLE_KEY",
 ]
-pytestmark = [
-    pytest.mark.integration,
-    pytest.mark.skipif(
-        any(name not in os.environ for name in REQUIRED_ENV), reason="needs the local Supabase"
-    ),
-]
+pytestmark = pytest.mark.integration
+LOCAL_HOSTS = {"host.docker.internal", "127.0.0.1", "localhost"}
+TIMEOUT = 10
 PASSWORD = "test-password-123"
 
 
@@ -34,6 +32,21 @@ PASSWORD = "test-password-123"
 class Account:
     id: str
     headers: dict[str, str]
+
+
+@pytest.fixture(scope="module", autouse=True)
+def local_stack_only() -> None:
+    """Never write to a real environment: skip without the env (fail in CI), exit if not local."""
+    missing = [name for name in REQUIRED_ENV if name not in os.environ]
+    if missing:
+        message = f"needs the local Supabase, missing: {', '.join(missing)}"
+        if os.environ.get("CI"):
+            pytest.fail(message, pytrace=False)  # a silent skip would hide a broken CI
+        pytest.skip(message)
+    for name in ("SUPABASE_URL", "DATABASE_URL"):
+        host = urlparse(os.environ[name]).hostname
+        if host not in LOCAL_HOSTS:
+            pytest.exit(f"refusing to run: {name} points to {host}, not a local stack", 2)
 
 
 @pytest.fixture(scope="module")
@@ -55,20 +68,22 @@ def make_user() -> Iterator[Callable[[], Account]]:
     def make() -> Account:
         email = f"{uuid.uuid4().hex}@example.test"
         body = {"email": email, "password": PASSWORD, "email_confirm": True}
-        user = httpx.post(f"{auth_url}/admin/users", headers=secret, json=body)
+        user = httpx.post(f"{auth_url}/admin/users", headers=secret, json=body, timeout=TIMEOUT)
         user.raise_for_status()
         created.append(user.json()["id"])
         login = httpx.post(
             f"{auth_url}/token?grant_type=password",
             headers={"apikey": os.environ["SUPABASE_PUBLISHABLE_KEY"]},
             json={"email": email, "password": PASSWORD},
+            timeout=TIMEOUT,
         )
         login.raise_for_status()
         return Account(created[-1], {"Authorization": f"Bearer {login.json()['access_token']}"})
 
     yield make
     for user_id in created:  # projects go with the user (on delete cascade)
-        httpx.delete(f"{auth_url}/admin/users/{user_id}", headers=secret)
+        deleted = httpx.delete(f"{auth_url}/admin/users/{user_id}", headers=secret, timeout=TIMEOUT)
+        deleted.raise_for_status()
 
 
 def test_real_supabase_token_passes_auth_and_creates_a_project(
