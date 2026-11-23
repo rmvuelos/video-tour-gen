@@ -1,0 +1,9 @@
+dist
+coverage
+playwright-report
+test-results
+docs
+services
+supabase
+pnpm-lock.yaml
+CLAUDE.md

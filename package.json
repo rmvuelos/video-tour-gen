@@ -1,0 +1,28 @@
+{
+  "name": "video-tour-gen",
+  "private": true,
+  "packageManager": "pnpm@12.4.1",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "supabase:start": "pnpm dlx supabase@3.2.0 start -x studio,realtime,edge-runtime,imgproxy,logflare,vector,postgres-meta,supavisor,mailpit",
+    "supabase:stop": "pnpm dlx supabase@3.2.0 stop",
+    "stack:up": "docker compose -f infra/docker-compose.yml up -d --build",
+    "stack:down": "docker compose -f infra/docker-compose.yml down",
+    "dev": "pnpm supabase:start && pnpm stack:up && pnpm --filter web dev",
+    "lint": "pnpm --filter web lint && docker compose -f infra/docker-compose.yml run --rm backend ruff check .",
+    "typecheck": "pnpm --filter web typecheck && docker compose -f infra/docker-compose.yml run --rm backend mypy",
+    "format": "prettier --write . && docker compose -f infra/docker-compose.yml run --rm backend ruff format .",
+    "format:check": "prettier --check . && docker compose -f infra/docker-compose.yml run --rm backend ruff format --check .",
+    "test": "pnpm --filter web test && docker compose -f infra/docker-compose.yml run --rm backend pytest",
+    "e2e": "pnpm --filter web e2e",
+    "prepare": "lefthook install"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.2.4",
+    "@commitlint/config-conventional": "^21.2.4",
+    "lefthook": "^2.2.2",
+    "prettier": "^3.10.1"
+  }
+}
