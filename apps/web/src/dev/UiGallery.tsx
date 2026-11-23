@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
 import cube from '../assets/icons/cube.svg'
 import { Avatar } from '../components/ui/Avatar'
 import { Button } from '../components/ui/Button'
@@ -59,9 +59,12 @@ const TYPE = [
 ] as const
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
+  const id = useId()
   return (
-    <section className="flex flex-col gap-4">
-      <Eyebrow tone="accent">{title}</Eyebrow>
+    <section aria-labelledby={id} className="flex flex-col gap-4">
+      <h2 id={id}>
+        <Eyebrow tone="accent">{title}</Eyebrow>
+      </h2>
       {children}
     </section>
   )
@@ -81,9 +84,6 @@ function Swatches({ items }: { items: readonly (readonly [string, string])[] }) 
 }
 
 export default function UiGallery() {
-  // Hover and focus are forced with classes so every state is visible at once.
-  const hover = 'bg-action-hover!'
-  const focus = 'outline-2 outline-offset-2 outline-focus'
   return (
     <main className="flex max-w-5xl flex-col gap-10 p-10">
       <h1 className="text-display font-semibold">UI primitives</h1>
@@ -104,17 +104,14 @@ export default function UiGallery() {
         </p>
       </Section>
       <Section title="Button">
-        {(['primary', 'secondary', 'cta'] as const).map((variant) => (
+        <p className="text-caption text-fg-muted">
+          Real states: hover a button, press Tab to see the focus ring (the first one starts
+          focused).
+        </p>
+        {(['primary', 'secondary', 'cta'] as const).map((variant, index) => (
           <div key={variant} className="flex flex-wrap items-center gap-4">
-            <Button variant={variant}>{LABELS[variant]}</Button>
-            <Button
-              variant={variant}
-              className={variant === 'secondary' ? 'bg-control-hover!' : hover}
-            >
-              {LABELS[variant]} (hover)
-            </Button>
-            <Button variant={variant} className={focus}>
-              {LABELS[variant]} (focus)
+            <Button variant={variant} autoFocus={index === 0}>
+              {LABELS[variant]}
             </Button>
             <Button variant={variant} disabled>
               {LABELS[variant]} (disabled)
@@ -128,7 +125,7 @@ export default function UiGallery() {
           <Avatar initials="AM" label="Adri M." />
           <Avatar initials="AM" label="Adri M." variant="solid" />
           <span className="inline-flex size-brand-mark items-center justify-center rounded-panel bg-action text-fg-on-action">
-            <Icon src={cube} className="size-6" />
+            <Icon src={cube} />
           </span>
         </div>
       </Section>
