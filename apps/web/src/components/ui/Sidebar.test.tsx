@@ -114,7 +114,7 @@ describe('Plan card and decorative parts', () => {
   it('hides the step numbers and the avatar initials from assistive technology', () => {
     setup()
     expect(screen.getByRole('link', { name: 'Upload assets' })).toBeInTheDocument()
-    expect(screen.getByText('AM')).toHaveAttribute('aria-hidden', 'true')
-    expect(screen.getByText('01')).toHaveAttribute('aria-hidden', 'true')
+    expect(screen.getByText('AM').closest('[aria-hidden=true]')).not.toBeNull()
+    expect(screen.getByText('01').closest('[aria-hidden=true]')).not.toBeNull()
   })
 })
