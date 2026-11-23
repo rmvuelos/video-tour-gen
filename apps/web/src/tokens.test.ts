@@ -69,7 +69,13 @@ const TEXT_PAIRS = TEXT_COLORS.flatMap((fg) =>
 ])
 
 // Icons, status dots and the focus ring need 3:1 (WCAG 1.4.11).
-const GRAPHICS = ['color-accent', 'color-success', 'color-icon-muted', 'color-focus']
+const GRAPHICS = [
+  'color-accent',
+  'color-success',
+  'color-danger',
+  'color-icon-muted',
+  'color-focus',
+]
 const GRAPHIC_SURFACES = ['color-surface', 'color-surface-subtle', 'color-canvas', 'color-selected']
 const GRAPHIC_NOT_USED_ON: Record<string, string[]> = {
   'color-accent': ['color-surface-subtle', 'color-selected'],
