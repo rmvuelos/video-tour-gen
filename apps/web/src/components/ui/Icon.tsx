@@ -5,7 +5,7 @@ export function Icon({ src, className = '' }: { src: string; className?: string 
       aria-hidden="true"
       className={`inline-block shrink-0 bg-current ${className}`}
       style={{
-        maskImage: `url(${src})`,
+        maskImage: `url("${src}")`,
         maskRepeat: 'no-repeat',
         maskPosition: 'center',
         maskSize: 'contain',
