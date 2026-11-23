@@ -142,9 +142,22 @@ def test_empty_bearer_is_401(client: TestClient) -> None:
         {"exp": int(time.time()) - 30},
     ],
     ids=[
-        "expired", "aud", "iss", "sub-not-uuid", "no-exp", "no-sub", "no-aud", "no-iss",
-        "role-anon", "role-service", "no-role", "no-iat", "is-anonymous", "nbf-future",
-        "iat-future", "past-leeway",
+        "expired",
+        "aud",
+        "iss",
+        "sub-not-uuid",
+        "no-exp",
+        "no-sub",
+        "no-aud",
+        "no-iss",
+        "role-anon",
+        "role-service",
+        "no-role",
+        "no-iat",
+        "is-anonymous",
+        "nbf-future",
+        "iat-future",
+        "past-leeway",
     ],
 )
 def test_bad_claims_are_401(
@@ -273,11 +286,20 @@ def test_jwks_failures_are_503(
     assert token not in caplog.text
 
 
-@pytest.mark.parametrize("jwks", [{"keys": []}, {"keys": [{"kty": "oct"}]}, []])
+@pytest.mark.parametrize("jwks", [{"keys": []}, []])
 def test_jwks_without_signing_keys_is_503(
     client: TestClient, key: ec.EllipticCurvePrivateKey, monkeypatch: pytest.MonkeyPatch, jwks: Any
 ) -> None:
     monkeypatch.setattr(PyJWKClient, "fetch_data", lambda self: jwks)
+
+    _assert_unavailable(_get(client, _token(key)), "keys")
+
+
+def test_jwks_with_keys_lacking_kid_is_503(
+    client: TestClient, key: ec.EllipticCurvePrivateKey, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    nameless = {"keys": [{k: v for k, v in _jwks(key)["keys"][0].items() if k != "kid"}]}
+    monkeypatch.setattr(PyJWKClient, "fetch_data", lambda self: nameless)
 
     _assert_unavailable(_get(client, _token(key)), "keys")
 
