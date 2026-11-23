@@ -13,6 +13,7 @@ class Settings(BaseSettings):
 
     supabase_url: str
     supabase_jwks_url: str
+    supabase_jwt_issuer: str  # public Supabase URL + /auth/v1: must match the token's iss
     supabase_secret_key: SecretStr
     redis_url: str
     database_url: SecretStr  # carries the DB password: never log it
