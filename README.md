@@ -59,3 +59,5 @@ La configura el owner del repositorio (Settings, Branches, regla para `main`), s
 - Require status checks to pass y "Require branches to be up to date": `web-quality`, `web-test`, `web-build`, `py-quality`, `py-test`, `e2e`, `security` y `commits`.
 - Require linear history y solo "Rebase and merge" permitido.
 - Sin force-push ni borrado de `main`.
+
+Cualquier cambio en `.github/`, `scripts/` o la configuración de gitleaks necesita la revisión del otro miembro del equipo. No usamos CODEOWNERS: somos dos y la aprobación ya es obligatoria.
