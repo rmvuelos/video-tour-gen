@@ -14,9 +14,21 @@
 /* Tokens in three layers: primitives (raw Figma values) -> semantic (roles, the only colors
    components use) -> component (sizes of a single primitive). Light theme only (D-10): a dark
    theme overrides the semantic layer and nothing else. Sources: figma-tokens.json. */
+/* Metric-compatible fallback while DM Sans loads (font-display: swap): Arial scaled to DM Sans
+   (measured: 92% of Arial's width, hhea ascent 992 / descent 310 / line gap 0 per 1000 em),
+   so the swap does not shift the layout. */
+@font-face {
+  font-family: 'DM Sans Fallback';
+  src: local('Arial');
+  size-adjust: 92%;
+  ascent-override: 107.83%;
+  descent-override: 33.7%;
+  line-gap-override: 0%;
+}
+
 @theme static {
   --color-*: initial;
-  --font-sans: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'DM Sans', 'DM Sans Fallback', ui-sans-serif, system-ui, sans-serif;
 
   /* 1. Primitives: "Caramel light" (6:518) and the neutrals of frame 6:2. */
   --color-white: #ffffff;
@@ -38,8 +50,9 @@
   --color-sand-8: #dccabc;
   --color-sand-9: #dac7ba;
   --color-umber: #886a57;
-  /* taupe and caramel darkened to the minimum that reaches 4.5:1 as text (see tokens.test.ts). */
-  --color-taupe-deep: #73645c;
+  /* taupe and caramel darkened to the minimum that reaches 4.5:1 as text (see tokens.test.ts):
+     taupe-deep on every surface, caramel-deep on the light surfaces. */
+  --color-taupe-deep: #62554f;
   --color-caramel-deep: #875a41;
 
   /* 2. Semantic. */
@@ -60,6 +73,8 @@
   --color-fg-accent: var(--color-caramel-deep);
   --color-fg-on-action: var(--color-white);
   --color-icon-muted: var(--color-taupe);
+  /* Graphic caramel reaches 3:1 on canvas and surface only: on surface-subtle, selected and tile
+     (2.7 to 2.9) icons use fg-accent. fg-accent is not used on control-hover, avatar or step-idle. */
   --color-accent: var(--color-caramel);
   --color-success: var(--color-sage);
   --color-action: var(--color-ink);
@@ -113,6 +128,8 @@
   --dash-length: 10px;
   --dash-gap: 12px;
   --dash-inset: 10px;
+  --focus-width: 2px;
+  --focus-offset: 2px;
 
   /* 3. Component. */
   --spacing-btn-pill: 42px;
@@ -120,6 +137,10 @@
   --spacing-btn-soft: 47px;
   --spacing-btn-soft-w: 192px;
   --spacing-btn-cta: 54px;
+  --spacing-btn-cta-gap: 9.5px;
+  --spacing-btn-cta-start: 18px;
+  --spacing-btn-cta-end: 11px;
+  --spacing-icon: 24px;
   --spacing-btn-cta-gap: 9.5px;
   --spacing-avatar: 48px;
   --spacing-avatar-sm: 44px;
@@ -134,8 +155,16 @@
   }
 
   :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
-    outline: 2px solid var(--color-focus);
-    outline-offset: 2px;
+    outline: var(--focus-width) solid var(--color-focus);
+    outline-offset: var(--focus-offset);
+  }
+
+  /* Masked icons paint with a background, which forced colors would drop. */
+  @media (forced-colors: active) {
+    [data-icon] {
+      forced-color-adjust: none;
+      background-color: ButtonText;
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {
