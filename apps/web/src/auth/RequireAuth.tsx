@@ -1,4 +1,5 @@
 import { Navigate, Outlet, useLocation } from 'react-router'
+import { Loading } from '../components/Loading'
 import { useSession } from './session'
 
 /** Layout route: signed-out users go to /login and come back to `state.from` (a path: check it with safeReturnPath). */
@@ -6,13 +7,7 @@ export function RequireAuth() {
   const session = useSession()
   const location = useLocation()
   if (session === undefined) {
-    return (
-      <main className="p-8">
-        <p role="status" className="text-body text-fg-muted">
-          Loading…
-        </p>
-      </main>
-    )
+    return <Loading />
   }
   if (session === null)
     return (
