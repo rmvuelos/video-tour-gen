@@ -2,6 +2,7 @@ import uuid
 from collections.abc import Iterator
 from typing import Any
 
+import psycopg
 import pytest
 from celery.exceptions import Retry
 
@@ -59,7 +60,7 @@ def test_a_job_that_is_not_queued_is_left_alone(env: Env) -> None:
 
     run()
 
-    assert env.processed == [] and not env.pool.ran("finished_at")
+    assert env.processed == [] and not env.pool.ran("update jobs set status = %s")
 
 
 def test_valid_file_gets_derivatives_uploaded_and_recorded(env: Env) -> None:
@@ -167,3 +168,31 @@ def test_time_limits_cover_every_file_of_a_project() -> None:
 
     assert ingest.soft_time_limit >= files * per_file
     assert ingest.time_limit > ingest.soft_time_limit
+
+
+def test_an_unclaimable_job_with_no_attempts_left_is_failed_as_worker_lost(env: Env) -> None:
+    env.pool.answers.clear()
+
+    run()
+
+    exhausted = env.pool.ran("worker_lost")
+    assert exhausted and exhausted[0][-1] == 5  # MAX_ATTEMPTS
+    assert "claimed_at" in next(sql for sql, _ in env.pool.calls if "set status = 'running'" in sql)
+
+
+def test_a_requeue_that_fails_gives_up_instead_of_leaving_the_job_running(env: Env) -> None:
+    env.storage.upload_errors = [ApiError(502, "storage_unavailable", "down")]
+    env.pool.errors["set status = 'queued'"] = psycopg.OperationalError("gone")
+
+    result = run()
+
+    assert result.successful()  # no retry was scheduled
+    assert env.pool.ran("update jobs set status = %s")[-1][:2] == ("failed", "storage_unavailable")
+
+
+def test_the_project_is_untouched_when_the_job_was_not_running_any_more(env: Env) -> None:
+    env.pool.rowcounts["update jobs set status = %s"] = 0
+
+    run()
+
+    assert not env.pool.ran("update projects set status")

@@ -294,13 +294,24 @@ def test_a_stale_queued_job_is_sent_again_on_resubmit(client: TestClient, env: E
     assert env.sent == [("ingest", [str(JOB["id"])])]
 
 
-def test_a_fresh_or_running_job_is_not_sent_again(client: TestClient, env: Env) -> None:
+def test_a_stale_running_job_is_sent_again_on_resubmit(client: TestClient, env: Env) -> None:
+    env.pool.answers.clear()
+    env.pool.on("for update", [{"id": PROJECT_ID, "status": "ingesting"}])
+    env.pool.on("from jobs", [JOB | {"stale": True, "status": "running"}])
+
+    client.post(URL, json={})
+
+    assert env.sent == [("ingest", [str(JOB["id"])])]
+    assert "claimed_at" in next(sql for sql, _ in env.pool.calls if "from jobs" in sql)
+
+
+def test_a_fresh_job_is_not_sent_again(client: TestClient, env: Env) -> None:
     env.pool.answers.clear()
     env.pool.on("for update", [{"id": PROJECT_ID, "status": "ingesting"}])
     env.pool.on("from jobs", [JOB | {"stale": False}])
 
     client.post(URL, json={})
-    env.pool.answers[-1] = ("from jobs", [JOB | {"stale": True, "status": "running"}])
+    env.pool.answers[-1] = ("from jobs", [JOB | {"stale": False, "status": "running"}])
     client.post(URL, json={})
 
     assert env.sent == []
