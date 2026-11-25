@@ -71,7 +71,7 @@ describe('Dropzone', () => {
     [
       'wrong type',
       new File(['x'], 'plan.heic', { type: 'image/heic' }),
-      'plan.heic is not a supported file type.',
+      'plan.heic is not a supported file type. Use JPG or PDF.',
     ],
   ])('rejects a file that is %s with a message that says why', async (_n, file, message) => {
     const { input, onFilesRejected } = setup()
@@ -84,6 +84,39 @@ describe('Dropzone', () => {
     const { input } = setup()
     fireEvent.change(input, { target: { files: [jpg('a.jpg'), jpg('b.jpg'), jpg('c.jpg')] } })
     expect(await screen.findByRole('alert')).toHaveTextContent('Too many files. The maximum is 2.')
+  })
+
+  it('names the group by its title and describes the button with the fixed limits', async () => {
+    const { view } = setup()
+    const group = screen.getByRole('group', { name: 'Photos' })
+    expect(group).toBe(view.container.firstElementChild)
+    const button = screen.getByRole('button', { name: 'Choose media' })
+    expect(button).toHaveAccessibleDescription('JPG, PNG up to 12 MB')
+    drag(group, [jpg()])
+    expect(await screen.findByText('Drop to upload')).toBeInTheDocument()
+    expect(button).toHaveAccessibleDescription('JPG, PNG up to 12 MB')
+  })
+
+  it('renders the title at the requested heading level and forwards ref and props', () => {
+    const ref = createRef<HTMLDivElement>()
+    setup({ titleLevel: 2, ref, 'data-testid': 'zone' } as never)
+    expect(screen.getByRole('heading', { level: 2, name: 'Photos' })).toBeInTheDocument()
+    expect(ref.current).toBe(screen.getByTestId('zone'))
+  })
+
+  it('reports "too many files" once, however many files are over the limit', async () => {
+    const { input } = setup({ maxFiles: 1 })
+    fireEvent.change(input, { target: { files: [jpg('a.jpg'), jpg('b.jpg'), jpg('c.jpg')] } })
+    expect(await screen.findAllByRole('listitem')).toHaveLength(1)
+  })
+
+  it('announces again when the same error repeats on a new drop', async () => {
+    const { input } = setup()
+    const bad = new File(['x'], 'a.heic', { type: 'image/heic' })
+    fireEvent.change(input, { target: { files: [bad] } })
+    const first = await screen.findByRole('alert')
+    fireEvent.change(input, { target: { files: [bad] } })
+    await waitFor(() => expect(screen.getByRole('alert')).not.toBe(first))
   })
 
   it('says "Drop to upload" in text while dragging, and clears it on leave', async () => {
