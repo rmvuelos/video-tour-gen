@@ -49,7 +49,10 @@ class FakeStorage:
         self.pool = pool
         self.calls_in_transaction: list[str] = []  # network calls made while a connection is open
         self.sign_error: Exception | None = None
+        self.delete_error: Exception | None = None
         self.signed: list[str] = []
+        self.deleted: list[tuple[str, list[str]]] = []
+        self.prefixes: list[tuple[str, str]] = []
 
     def _note(self, call: str) -> None:
         if self.pool and self.pool.open_connections:
