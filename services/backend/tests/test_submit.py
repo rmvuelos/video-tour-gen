@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from app.api import app
 from app.auth import current_user
 from app.db import get_pool
+from app.ratelimit import RateLimiter, submit_limiter
 from app.storage import get_storage
 from app.worker import celery_app
 
@@ -63,6 +64,8 @@ def env(monkeypatch: pytest.MonkeyPatch, fake_env: None) -> Iterator[Env]:
         e.sent.append((name, args))
 
     monkeypatch.setattr(celery_app, "send_task", send_task)
+    limiter = RateLimiter(100, 60)
+    app.dependency_overrides[submit_limiter] = lambda: limiter
     app.dependency_overrides[get_pool] = lambda: e.pool
     app.dependency_overrides[get_storage] = lambda: e.storage
     app.dependency_overrides[current_user] = lambda: USER
@@ -88,6 +91,7 @@ def test_submit_marks_files_stores_details_creates_the_job_and_enqueues_it(
 
     assert response.status_code == 202
     assert response.json()["id"] == str(JOB["id"]) and response.json()["status"] == "queued"
+    assert env.sent == [("ingest", [str(JOB["id"])])]
     assert len(env.pool.ran("set status = 'uploaded'")) == 4
     assert env.pool.ran("set page_index") == [(2, PROJECT_ID, USER.id)]
     assert env.pool.ran("set area_m2")[0][:2] == (55.5, "piso")
@@ -176,6 +180,28 @@ def test_a_project_that_is_neither_draft_nor_active_is_409(client: TestClient, e
     assert client.post(URL, json={}).status_code == 409
 
 
+def test_a_failed_enqueue_fails_the_job_and_frees_the_project(client: TestClient, env: Env) -> None:
+    env.good_set()
+    env.send_error = ConnectionError("redis down")
+
+    response = client.post(URL, json={})
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "enqueue_failed"
+    assert env.pool.ran("set status = 'failed'") == [(JOB["id"], USER.id)]
+    assert env.pool.ran("set status = 'draft'") == [(PROJECT_ID, USER.id)]
+
+
+def test_submit_has_its_own_rate_limit(client: TestClient, env: Env) -> None:
+    limiter = RateLimiter(1, 60)
+    app.dependency_overrides[submit_limiter] = lambda: limiter
+    env.good_set()
+
+    statuses = [client.post(URL, json={}).status_code for _ in range(2)]
+
+    assert statuses == [202, 429]
+
+
 def test_storage_is_checked_without_holding_a_database_connection(
     client: TestClient, env: Env
 ) -> None:
@@ -254,3 +280,23 @@ def test_details_that_were_not_sent_do_not_erase_the_saved_ones(
 
     sql = next(sql for sql, _ in env.pool.calls if "set area_m2" in sql)
     assert "coalesce(%s, area_m2)" in sql and "coalesce(%s, description)" in sql
+
+
+
+
+
+
+
+
+def test_reopening_only_touches_a_project_that_is_still_ingesting(
+    client: TestClient, env: Env
+) -> None:
+    env.good_set()
+    env.send_error = ConnectionError("redis down")
+
+    client.post(URL, json={})
+
+    sql = next(sql for sql, _ in env.pool.calls if "set status = 'draft'" in sql)
+    assert "status = 'ingesting'" in sql.split("where")[1]
+
+
