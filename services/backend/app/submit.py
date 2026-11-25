@@ -197,7 +197,7 @@ def _create_job(
         return Outcome(Job.model_validate(job), created=True, send=True)
 
 
-def _send(job: Job) -> None:
+def send_job(job: Job) -> None:
     try:
         enqueue_ingest(job.id)
     except Exception as exc:
@@ -237,7 +237,7 @@ def submit(
         outcome = _create_job(pool, project_uuid, user.id, body, rows)
     if outcome.send:
         try:
-            _send(outcome.job)
+            send_job(outcome.job)
         except ApiError:
             if outcome.created:
                 _release(pool, outcome.job, user.id)
