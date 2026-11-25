@@ -5,11 +5,12 @@ import { useObjectUrl } from './use-object-url'
 
 describe('useObjectUrl', () => {
   let n = 0
+  // jsdom has no object URLs: define them so they can be spied on.
+  Object.assign(URL, { createObjectURL: () => '', revokeObjectURL: () => {} })
   const create = vi.spyOn(URL, 'createObjectURL')
   const revoke = vi.spyOn(URL, 'revokeObjectURL')
   beforeEach(() => {
     n = 0
-    Object.assign(URL, { createObjectURL: () => '', revokeObjectURL: () => {} })
     create.mockImplementation(() => `blob:${++n}`)
     revoke.mockReset()
     create.mockClear()
