@@ -75,6 +75,9 @@
   --color-fg-accent: var(--color-caramel-deep);
   --color-fg-on-action: var(--color-white);
   --color-icon-muted: var(--color-taupe);
+  /* Derived, not Figma: input borders need 3:1 (WCAG 1.4.11); the Figma sand lines are 1.2:1. */
+  --color-field-border: var(--color-taupe);
+  --color-track: var(--color-sand-8);
   /* Graphic caramel reaches 3:1 on canvas and surface only: on surface-subtle, selected and tile
      (2.7 to 2.9) icons use fg-accent. fg-accent is not used on control-hover, avatar or step-idle. */
   --color-accent: var(--color-caramel);
@@ -119,6 +122,7 @@
   --radius-card: 20px;
   --radius-card-lg: 22px;
   --radius-pill: 9999px;
+  --animate-indeterminate: indeterminate 1.4s ease-in-out infinite;
   --shadow-*: initial;
   --shadow-card: 0 8px 24px -4px color-mix(in srgb, var(--color-umber) 12%, transparent);
 
@@ -143,6 +147,9 @@
   --spacing-btn-cta-gap: 9.5px;
   --spacing-btn-cta-start: 16px;
   --spacing-btn-cta-end: 9px;
+  /* Derived: input height = soft button height; progress bar thickness. */
+  --spacing-field: 47px;
+  --spacing-progress: 8px;
   --spacing-icon: 24px;
   --spacing-icon-sm: 20px;
   --spacing-step: 30px;
@@ -158,6 +165,15 @@
   --spacing-avatar: 3rem;
   --spacing-avatar-sm: 2.75rem;
   --spacing-brand-mark: 47px;
+}
+
+@keyframes indeterminate {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
 }
 
 @layer base {
