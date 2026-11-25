@@ -6,7 +6,7 @@ configuration (`celery worker -P prefork`), so a real one adds start-up time but
 """
 
 import io
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from typing import Any
 
 import httpx2 as httpx
@@ -14,7 +14,7 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from app.storage import create_storage
+from app.storage import StorageClient, create_storage
 from app.worker import celery_app
 from app.worker.ingest import ingest
 from tests.conftest import Account
@@ -23,6 +23,16 @@ from tests.ingest_fixtures import encrypted_pdf_bytes, image_bytes, pdf_bytes
 pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("local_stack_only")]
 TIMEOUT = 10
 GPS_IFD = 0x8825
+CAP = 20 * 1024**2
+
+
+@pytest.fixture
+def storage() -> Iterator[StorageClient]:
+    client = create_storage()
+    try:
+        yield client
+    finally:
+        client.close()
 
 
 def gps_jpeg() -> bytes:
@@ -64,7 +74,10 @@ def run_project(
 
 
 def test_a_pdf_and_three_photos_become_clean_derivatives(
-    client: TestClient, make_user: Callable[[], Account], monkeypatch: pytest.MonkeyPatch
+    client: TestClient,
+    make_user: Callable[[], Account],
+    monkeypatch: pytest.MonkeyPatch,
+    storage: StorageClient,
 ) -> None:
     ana = make_user()
 
@@ -74,18 +87,17 @@ def test_a_pdf_and_three_photos_become_clean_derivatives(
     assert latest["status"] == "done" and latest["duration_ms"] >= 0 and latest["attempts"] == 1
     assert [f["status"] for f in latest["files"]] == ["valid"] * 4
     assert client.get(f"/projects/{project}", headers=ana.headers).json()["status"] == "ready"
-    storage = create_storage()
     for item in latest["files"]:
         base = f"{ana.id}/{project}/{item['id']}"
         extension = "png" if item["kind"] == "plan" else "jpg"
-        main = storage.download("derived", f"{base}/main.{extension}")
-        thumb = storage.download("derived", f"{base}/thumb.jpg")
+        main = storage.download("derived", f"{base}/main.{extension}", CAP)
+        thumb = storage.download("derived", f"{base}/thumb.jpg", CAP)
         assert main and thumb
         image = Image.open(io.BytesIO(main))
         assert (image.width, image.height) == (item["width"], item["height"])
         assert len(image.getexif()) == 0 and b"SecretCam" not in main  # no EXIF, no GPS
     gps_id = registered[1]["file_id"]  # the first photo, the one with GPS
-    originals = storage.download("originals", f"{ana.id}/{project}/{gps_id}")
+    originals = storage.download("originals", f"{ana.id}/{project}/{gps_id}", CAP)
     assert originals and b"SecretCam" in originals  # the original is untouched
 
 
