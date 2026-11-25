@@ -282,12 +282,6 @@ def test_details_that_were_not_sent_do_not_erase_the_saved_ones(
     assert "coalesce(%s, area_m2)" in sql and "coalesce(%s, description)" in sql
 
 
-
-
-
-
-
-
 def test_reopening_only_touches_a_project_that_is_still_ingesting(
     client: TestClient, env: Env
 ) -> None:
@@ -298,5 +292,3 @@ def test_reopening_only_touches_a_project_that_is_still_ingesting(
 
     sql = next(sql for sql, _ in env.pool.calls if "set status = 'draft'" in sql)
     assert "status = 'ingesting'" in sql.split("where")[1]
-
-
