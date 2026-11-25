@@ -54,18 +54,13 @@ export function Dropzone({
     onDropAccepted: (files) => onFilesAccepted(files),
     onDropRejected: (rejected) => onFilesRejected?.(rejected),
   })
-  // Dragging: solid border (3:1) and a text, never only color. Dashed = idle.
-  const border = isDragReject
-    ? 'border-solid border-danger'
-    : isDragActive
-      ? 'border-solid border-field-border'
-      : 'border-dashed border-line-dashed'
+  // Dragging: solid stroke and a text, never only color. Idle: the dashed Figma border.
+  const dash = isDragReject ? 'reject' : isDragActive ? 'active' : undefined
   return (
     <div {...getRootProps()} className={className}>
       <input {...getInputProps()} />
-      <Card
-        className={`flex min-h-dropzone flex-col items-center justify-center gap-4 border-2 p-card text-center ${border}`}
-      >
+      <Card className="relative flex min-h-dropzone flex-col items-center justify-center gap-4 p-card text-center">
+        <span aria-hidden="true" data-dash={dash} className="dash-border" />
         <span className="inline-flex size-tile items-center justify-center rounded-card-lg bg-tile text-fg-accent">
           <Icon src={icon} size="lg" />
         </span>

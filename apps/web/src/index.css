@@ -217,3 +217,42 @@
     border: 1px solid ButtonText;
   }
 }
+
+/* Dropzone border (Figma: 2px dashes of 10, gap 12, inset 10) from gradients; dragging: solid. */
+.dash-border {
+  --dash-color: var(--color-line-dashed);
+  --dash-h: repeating-linear-gradient(
+    90deg,
+    var(--dash-color) 0 var(--dash-length),
+    transparent var(--dash-length) calc(var(--dash-length) + var(--dash-gap))
+  );
+  --dash-v: repeating-linear-gradient(
+    180deg,
+    var(--dash-color) 0 var(--dash-length),
+    transparent var(--dash-length) calc(var(--dash-length) + var(--dash-gap))
+  );
+  position: absolute;
+  inset: var(--dash-inset);
+  pointer-events: none;
+  background:
+    var(--dash-h) left top / 100% var(--dash-width) no-repeat,
+    var(--dash-h) left bottom / 100% var(--dash-width) no-repeat,
+    var(--dash-v) left top / var(--dash-width) 100% no-repeat,
+    var(--dash-v) right top / var(--dash-width) 100% no-repeat;
+}
+.dash-border[data-dash='active'],
+.dash-border[data-dash='reject'] {
+  --dash-color: var(--color-field-border);
+  background: none;
+  border: var(--dash-width) solid var(--dash-color);
+  border-radius: calc(var(--radius-card) - var(--dash-inset));
+}
+.dash-border[data-dash='reject'] {
+  --dash-color: var(--color-danger);
+}
+@media (forced-colors: active) {
+  .dash-border {
+    background: none;
+    border: var(--dash-width) dashed CanvasText;
+  }
+}
