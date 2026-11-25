@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 ORIGINALS = "originals"
 DERIVED = "derived"
 TIMEOUT = httpx.Timeout(10, connect=3)
+TRANSFER_TIMEOUT = httpx.Timeout(60, connect=3)  # originals are up to 20 MB
 LIST_LIMIT = 1000
 ISSUER_SUFFIX = "/auth/v1"
 
@@ -21,6 +22,8 @@ class ObjectStorage(Protocol):
     def size(self, path: str) -> int | None: ...
     def delete(self, bucket: str, paths: list[str]) -> None: ...
     def delete_prefix(self, bucket: str, prefix: str) -> None: ...
+    def download(self, bucket: str, path: str) -> bytes | None: ...
+    def upload(self, bucket: str, path: str, data: bytes, content_type: str) -> None: ...
 
 
 class StorageClient:
@@ -86,6 +89,20 @@ class StorageClient:
 
     def delete(self, bucket: str, paths: list[str]) -> None:
         self._call("DELETE", f"/object/{bucket}", json={"prefixes": paths})
+
+    def download(self, bucket: str, path: str) -> bytes | None:
+        response = self._call("GET", f"/object/{bucket}/{path}", timeout=TRANSFER_TIMEOUT)
+        return None if response is None else response.content
+
+    def upload(self, bucket: str, path: str, data: bytes, content_type: str) -> None:
+        # x-upsert: a retried job overwrites what a half-finished attempt left.
+        headers = {"content-type": content_type, "x-upsert": "true"}
+        response = self._call(
+            "POST", f"/object/{bucket}/{path}", content=data, headers=headers,
+            timeout=TRANSFER_TIMEOUT,
+        )  # fmt: skip
+        if response is None:
+            raise _unavailable()
 
     def delete_prefix(self, bucket: str, prefix: str) -> None:
         # shortcut: one folder level (derived files are flat per file id); recurse if that changes.

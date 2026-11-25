@@ -12,6 +12,8 @@ class IngestErrorCode(StrEnum):
     PDF_TOO_MANY_PAGES = "pdf_too_many_pages"
     PDF_PAGE_OUT_OF_RANGE = "pdf_page_out_of_range"
     EMPTY_FILE = "empty_file"
+    FILE_TOO_LARGE = "file_too_large"  # bytes over the input limit (checked by the job)
+    ORIGINAL_MISSING = "original_missing"  # the object is gone from Storage
 
 
 class IngestError(Exception):
