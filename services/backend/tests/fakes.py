@@ -63,6 +63,8 @@ class FakeStorage:
         self.signed: list[str] = []
         self.deleted: list[tuple[str, list[str]]] = []
         self.prefixes: list[tuple[str, str]] = []
+        self.objects: dict[tuple[str, str], bytes] = {}
+        self.upload_errors: list[Exception] = []  # raised one per upload call, then it works
 
     def _note(self, call: str) -> None:
         if self.pool and self.pool.open_connections:
@@ -87,3 +89,11 @@ class FakeStorage:
 
     def delete_prefix(self, bucket: str, prefix: str) -> None:
         self.prefixes.append((bucket, prefix))
+
+    def download(self, bucket: str, path: str) -> bytes | None:
+        return self.objects.get((bucket, path))
+
+    def upload(self, bucket: str, path: str, data: bytes, content_type: str) -> None:
+        if self.upload_errors:
+            raise self.upload_errors.pop(0)
+        self.objects[(bucket, path)] = data

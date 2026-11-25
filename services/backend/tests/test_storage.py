@@ -124,3 +124,26 @@ def test_timeouts_are_short_and_the_client_can_be_closed() -> None:
     assert client._http.timeout == httpx.Timeout(10, connect=3)
     client.close()
     assert client._http.is_closed
+
+
+def test_download_returns_the_raw_bytes_and_none_when_missing() -> None:
+    def handle(request: httpx.Request) -> httpx.Response:
+        found = request.url.path.endswith(PATH)
+        return httpx.Response(200, content=b"\x00raw") if found else httpx.Response(404)
+
+    client = make(httpx.MockTransport(handle))
+
+    assert client.download("originals", PATH) == b"\x00raw"
+    assert client.download("originals", "u1/p1/other") is None
+
+
+def test_upload_overwrites_so_a_retry_is_idempotent() -> None:
+    calls: list[httpx.Request] = []
+
+    make(transport(200, {}, calls)).upload("derived", f"{PATH}/main.jpg", b"jpg", "image/jpeg")
+
+    assert calls[0].method == "POST"
+    assert calls[0].url.path == f"/storage/v1/object/derived/{PATH}/main.jpg"
+    assert calls[0].headers["x-upsert"] == "true"
+    assert calls[0].headers["content-type"] == "image/jpeg"
+    assert calls[0].content == b"jpg"
