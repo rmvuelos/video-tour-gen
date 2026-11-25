@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from 'react'
+import { useId, type ComponentProps, type ReactNode } from 'react'
 import gridSm from '../assets/icons/grid-sm.svg'
 import image from '../assets/icons/image.svg'
 import cube from '../assets/icons/cube.svg'
@@ -10,6 +10,7 @@ import { Card } from '../components/ui/Card'
 import { Checklist } from '../components/ui/Checklist'
 import { Dropzone } from '../components/ui/Dropzone'
 import { Eyebrow } from '../components/ui/Eyebrow'
+import { FileCard } from '../components/ui/FileCard'
 import { Field } from '../components/ui/Field'
 import { Icon } from '../components/ui/Icon'
 import { Input } from '../components/ui/Input'
@@ -218,7 +219,7 @@ export default function UiGallery() {
         ))}
         <ProgressBar label="Preparing upload" />
       </Section>
-      <Section title="Dropzone">
+      <Section title="Dropzone, file card">
         <p className="text-caption text-fg-muted">
           Drag a file over a zone for the drag state; a .heic or a large file shows the rejection.
         </p>
@@ -233,6 +234,11 @@ export default function UiGallery() {
             />
           ))}
         </div>
+        <div className="grid max-w-xl gap-3">
+          {CARDS.map((card) => (
+            <FileCard key={card.file.name} {...card} />
+          ))}
+        </div>
       </Section>
     </main>
   )
@@ -243,6 +249,38 @@ const DROPZONES = [
   ['Floor plan or blueprint', 'PDF, PNG or JPG, up to 20 MB', 'Browse files', gridSm, 20, 1],
   ['Room photos', '3 to 10 photos, JPG, PNG or WebP, up to 12 MB', 'Choose media', image, 12, 10],
 ] as const
+const retry = { label: 'Retry', onClick: () => {} }
+const jpg = (name: string, size: number) => ({ name, size, type: 'image/jpeg' })
+const noop = () => {}
+const CARDS: ComponentProps<typeof FileCard>[] = [
+  { file: jpg('salon.jpg', 13_002_342), onRemove: noop, status: 'pending' },
+  {
+    file: jpg('a-very-long-name-for-the-living-room-south-wall-photo.jpg', 4_200_000),
+    onRemove: noop,
+    status: 'uploading',
+    progress: 42,
+  },
+  {
+    file: { name: 'plan.pdf', size: 2_400_000, type: 'application/pdf' },
+    onRemove: noop,
+    status: 'uploaded',
+  },
+  {
+    file: jpg('hall.jpg', 4_200_000),
+    onRemove: noop,
+    status: 'error',
+    error: 'Upload failed. Check your connection.',
+    action: retry,
+  },
+  {
+    file: jpg('huge.jpg', 18_900_000),
+    onRemove: noop,
+    status: 'error',
+    error: 'Weighs 18 MB; the maximum is 12 MB. Pick another.',
+    action: { ...retry, label: 'Replace' },
+  },
+]
+
 const LABELS = {
   primary: 'Browse files',
   secondary: 'Add description',
