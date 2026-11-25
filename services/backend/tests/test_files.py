@@ -1,4 +1,3 @@
-import uuid
 from collections.abc import Iterator
 from typing import Any
 
@@ -136,14 +135,6 @@ def test_only_draft_projects_accept_files(client: TestClient, pool: FakePool) ->
     assert response.json()["error"]["code"] == "project_not_draft"
 
 
-
-
-
-
-
-
-
-
 def test_a_signing_failure_removes_the_pending_rows_and_is_a_502(
     client: TestClient, pool: FakePool, storage: FakeStorage
 ) -> None:
@@ -155,10 +146,6 @@ def test_a_signing_failure_removes_the_pending_rows_and_is_a_502(
     assert len(pool.ran("delete from project_files where id = any")) == 1
 
 
-
-
-
-
 @pytest.mark.parametrize(
     "name",
     ["a/b.jpg", "a\\b.jpg", "a\u0000.jpg", "a\u200b.jpg", "\u202egpj.exe"],
@@ -167,8 +154,6 @@ def test_filenames_with_separators_or_invisible_characters_are_422(
     client: TestClient, name: str
 ) -> None:
     assert client.post(URL, json={"files": [photo(filename=name)]}).status_code == 422
-
-
 
 
 def test_storage_is_never_called_while_the_project_lock_is_held(
