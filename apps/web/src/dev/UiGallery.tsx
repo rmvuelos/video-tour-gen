@@ -198,7 +198,7 @@ export default function UiGallery() {
           hall.jpg is 18 MB; the maximum is 12 MB. Reduce the photo or pick another.
         </Alert>
         {[0, 40, 100].map((value) => (
-          <ProgressBar key={value} value={value} label={`Uploading, ${value}%`} />
+          <ProgressBar key={value} value={value} label="Upload progress" />
         ))}
         <ProgressBar label="Preparing upload" />
       </Section>
