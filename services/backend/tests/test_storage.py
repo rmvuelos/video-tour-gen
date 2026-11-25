@@ -30,7 +30,9 @@ def test_signed_upload_url_points_to_the_public_host_and_uses_the_service_key() 
     url = make(transport(200, body, calls)).signed_upload_url(PATH)
 
     assert url == f"http://public.test/storage/v1/object/upload/sign/originals/{PATH}?token=t0k"
-    assert str(calls[0].url) == f"http://internal.test/storage/v1/object/upload/sign/originals/{PATH}"
+    assert (
+        str(calls[0].url) == f"http://internal.test/storage/v1/object/upload/sign/originals/{PATH}"
+    )
     assert calls[0].headers["authorization"] == "Bearer secret-key"
 
 
