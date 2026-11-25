@@ -38,7 +38,10 @@ class Env:
 
     def latest(self, **changes: Any) -> None:
         self.pool.answers = [a for a in self.pool.answers if "limit 1" not in a[0]]
-        self.pool.on("order by created_at desc limit 1", [{**FAILED, **changes}] if changes != {"none": 1} else [])
+        self.pool.on(
+            "order by created_at desc limit 1",
+            [{**FAILED, **changes}] if changes != {"none": 1} else [],
+        )
 
 
 @pytest.fixture
@@ -131,7 +134,8 @@ def test_a_refusing_broker_fails_the_new_job_and_keeps_the_project(
 
 
 def test_retry_is_rate_limited(client: TestClient, env: Env) -> None:
-    app.dependency_overrides[submit_limiter] = lambda: RateLimiter(1, 60)
+    tight = RateLimiter(1, 60)
+    app.dependency_overrides[submit_limiter] = lambda: tight
 
     first, second = client.post(RETRY), client.post(RETRY)
 
