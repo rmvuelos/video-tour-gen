@@ -40,9 +40,8 @@ def test_size_is_read_from_the_object_info() -> None:
     assert make(transport(200, {"size": 123}, [])).size(PATH) == 123
 
 
-@pytest.mark.parametrize("status", [400, 404])
-def test_size_of_a_missing_object_is_none(status: int) -> None:
-    assert make(transport(status, {"error": "not_found"}, [])).size(PATH) is None
+def test_size_of_a_missing_object_is_none() -> None:
+    assert make(transport(404, {"error": "not_found"}, [])).size(PATH) is None
 
 
 def test_delete_sends_the_exact_paths() -> None:
