@@ -260,4 +260,7 @@
     background: none;
     border: var(--dash-width) dashed CanvasText;
   }
+  .dash-border[data-dash] {
+    border-style: solid;
+  }
 }
