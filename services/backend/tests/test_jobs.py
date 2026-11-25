@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from app.api import app
 from app.auth import current_user
 from app.db import get_pool
-from app.ratelimit import RateLimiter, submit_limiter
+from app.ratelimit import RateLimiter, read_limiter, submit_limiter
 from app.worker import celery_app
 from tests.fakes import PROJECT_ID, USER, FakePool
 
@@ -19,7 +19,7 @@ NOW = datetime(2026, 1, 1, tzinfo=UTC)
 JOB_ID = uuid.uuid4()
 FAILED = {
     "id": JOB_ID, "project_id": PROJECT_ID, "status": "failed", "error_code": "storage_unavailable",
-    "attempts": 4, "created_at": NOW, "started_at": NOW, "finished_at": NOW, "duration_ms": 1200,
+    "attempts": 4, "stale": False, "created_at": NOW, "started_at": NOW, "finished_at": NOW, "duration_ms": 1200,
 }  # fmt: skip
 NEW_JOB = {"id": uuid.uuid4(), "project_id": PROJECT_ID, "status": "queued", "created_at": NOW}
 FILE = {"id": uuid.uuid4(), "kind": "photo", "status": "invalid", "error_code": "corrupt_file",
@@ -56,6 +56,7 @@ def env(monkeypatch: pytest.MonkeyPatch, fake_env: None) -> Iterator[Env]:
     monkeypatch.setattr(celery_app, "send_task", send_task)
     limiter = RateLimiter(100, 60)
     app.dependency_overrides[submit_limiter] = lambda: limiter
+    app.dependency_overrides[read_limiter] = lambda: limiter
     app.dependency_overrides[get_pool] = lambda: e.pool
     app.dependency_overrides[current_user] = lambda: USER
     yield e
@@ -140,3 +141,36 @@ def test_retry_is_rate_limited(client: TestClient, env: Env) -> None:
     first, second = client.post(RETRY), client.post(RETRY)
 
     assert (first.status_code, second.status_code) == (202, 429)
+
+
+def test_retry_takes_over_a_stale_running_job_by_failing_it_first(
+    client: TestClient, env: Env
+) -> None:
+    env.latest(status="running", stale=True)
+
+    response = client.post(RETRY)
+
+    assert response.status_code == 202 and env.sent == [("ingest", [str(NEW_JOB["id"])])]
+    abandoned = env.pool.ran("worker_lost")
+    assert abandoned == [(JOB_ID, USER.id)]  # before the insert: one active job per project
+    sqls = [sql for sql, _ in env.pool.calls]
+    assert sqls.index(next(q for q in sqls if "worker_lost" in q)) < sqls.index(
+        next(q for q in sqls if "insert into jobs" in q)
+    )
+
+
+def test_polling_is_rate_limited_on_its_own_scope(client: TestClient, env: Env) -> None:
+    tight = RateLimiter(1, 60)
+    app.dependency_overrides[read_limiter] = lambda: tight
+
+    first, second = client.get(LATEST), client.get(LATEST)
+
+    assert (first.status_code, second.status_code) == (200, 429)
+
+
+def test_ordering_is_total_so_equal_timestamps_cannot_shuffle(client: TestClient, env: Env) -> None:
+    client.get(LATEST)
+
+    sqls = " ".join(sql for sql, _ in env.pool.calls)
+    assert "order by created_at desc, id desc limit 1" in sqls
+    assert "order by (kind = 'plan') desc, created_at, id" in sqls
