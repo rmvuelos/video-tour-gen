@@ -13,8 +13,11 @@ from app.auth import CurrentUserDep
 from app.db import Pool, PoolDep, connection
 from app.errors import ERROR_RESPONSES, ApiError, ErrorDetail
 from app.files import LOCK, input_limits
+from app.ratelimit import SubmitLimit
+from app.settings import get_settings
 from app.storage import ObjectStorage, StorageDep
 from app.validation import not_found, parse_id, printable
+from app.worker import celery_app, configure_celery
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/projects", tags=["submit"], responses=ERROR_RESPONSES)
@@ -47,6 +50,13 @@ INSERT_JOB = (
     "insert into jobs (project_id, user_id, type) values (%s, %s, 'ingest') "
     "returning id, project_id, status, created_at"
 )
+FAIL_JOB = (
+    "update jobs set status = 'failed', error_code = 'enqueue_failed', finished_at = now() "
+    "where id = %s and user_id = %s and status = 'queued'"
+)
+REOPEN = (
+    "update projects set status = 'draft' where id = %s and user_id = %s and status = 'ingesting'"
+)
 
 
 def _note(value: str) -> str:
@@ -74,6 +84,11 @@ class Job(BaseModel):
 class Outcome:
     job: Job
     created: bool  # a new job: if the broker refuses it, release the project
+
+
+def enqueue_ingest(job_id: UUID) -> None:
+    configure_celery(get_settings())  # the API process has no worker bootstrap
+    celery_app.send_task("ingest", args=[str(job_id)])
 
 
 def _detail(code: str, message: str, file_id: str | None = None) -> ErrorDetail:
@@ -159,6 +174,24 @@ def _create_job(
         return Outcome(Job.model_validate(job), created=True)
 
 
+def _send(job: Job) -> None:
+    try:
+        enqueue_ingest(job.id)
+    except Exception as exc:
+        logger.error("enqueue failed for job %s: %s", job.id, type(exc).__name__)
+        raise ApiError(
+            503, "enqueue_failed", "Could not queue the job. Try again shortly."
+        ) from exc
+
+
+def _release(pool: Pool, job: Job, user_id: UUID) -> None:
+    """The job was committed before sending (so the worker always finds it). The broker refused:
+    fail the job and reopen the project, so the user can submit again."""
+    with connection(pool) as conn:
+        conn.execute(FAIL_JOB, (job.id, user_id))
+        conn.execute(REOPEN, (job.project_id, user_id))
+
+
 @router.post("/{project_id}/submit", status_code=202)
 def submit(
     project_id: str,
@@ -166,6 +199,7 @@ def submit(
     user: CurrentUserDep,
     pool: PoolDep,
     storage: StorageDep,
+    _limit: SubmitLimit,
 ) -> Job:
     project_uuid = parse_id(project_id)
     with connection(pool) as conn:  # short read: no network while a connection is held
@@ -178,4 +212,10 @@ def submit(
                 422, "invalid_files", "The project is not ready to send.", details=errors
             )
         outcome = _create_job(pool, project_uuid, user.id, body, rows)
+    if outcome.created:
+        try:
+            _send(outcome.job)
+        except ApiError:
+            _release(pool, outcome.job, user.id)
+            raise
     return outcome.job
