@@ -12,6 +12,7 @@ from app.auth import current_user
 from app.db import get_pool
 from app.ratelimit import RateLimiter, submit_limiter
 from app.storage import get_storage
+from app.submit import configure_publisher
 from app.worker import celery_app
 
 URL = f"/projects/{PROJECT_ID}/submit"
@@ -282,6 +283,41 @@ def test_details_that_were_not_sent_do_not_erase_the_saved_ones(
     assert "coalesce(%s, area_m2)" in sql and "coalesce(%s, description)" in sql
 
 
+def test_a_stale_queued_job_is_sent_again_on_resubmit(client: TestClient, env: Env) -> None:
+    env.pool.answers.clear()
+    env.pool.on("for update", [{"id": PROJECT_ID, "status": "ingesting"}])
+    env.pool.on("from jobs", [JOB | {"stale": True}])
+
+    response = client.post(URL, json={})
+
+    assert response.status_code == 202
+    assert env.sent == [("ingest", [str(JOB["id"])])]
+
+
+def test_a_fresh_or_running_job_is_not_sent_again(client: TestClient, env: Env) -> None:
+    env.pool.answers.clear()
+    env.pool.on("for update", [{"id": PROJECT_ID, "status": "ingesting"}])
+    env.pool.on("from jobs", [JOB | {"stale": False}])
+
+    client.post(URL, json={})
+    env.pool.answers[-1] = ("from jobs", [JOB | {"stale": True, "status": "running"}])
+    client.post(URL, json={})
+
+    assert env.sent == []
+
+
+def test_a_failed_resend_is_a_503_that_leaves_the_job_queued(client: TestClient, env: Env) -> None:
+    env.pool.answers.clear()
+    env.pool.on("for update", [{"id": PROJECT_ID, "status": "ingesting"}])
+    env.pool.on("from jobs", [JOB | {"stale": True}])
+    env.send_error = ConnectionError("redis down")
+
+    response = client.post(URL, json={})
+
+    assert response.status_code == 503
+    assert env.pool.ran("set status = 'failed'") == []
+
+
 def test_reopening_only_touches_a_project_that_is_still_ingesting(
     client: TestClient, env: Env
 ) -> None:
@@ -292,3 +328,11 @@ def test_reopening_only_touches_a_project_that_is_still_ingesting(
 
     sql = next(sql for sql, _ in env.pool.calls if "set status = 'draft'" in sql)
     assert "status = 'ingesting'" in sql.split("where")[1]
+
+
+def test_the_publisher_gives_up_quickly_when_redis_is_down(fake_env: None) -> None:
+    configure_publisher()
+
+    assert celery_app.conf.broker_connection_timeout <= 5
+    assert celery_app.conf.broker_transport_options["socket_connect_timeout"] <= 5
+    assert celery_app.conf.task_publish_retry_policy["max_retries"] <= 2
