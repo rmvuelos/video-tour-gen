@@ -96,6 +96,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "celery" },
     { name = "fastapi" },
+    { name = "httpx2" },
     { name = "packaging" },
     { name = "psycopg", extra = ["binary", "pool"] },
     { name = "pydantic-settings" },
@@ -106,7 +107,6 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "httpx2" },
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-cov" },
@@ -117,6 +117,7 @@ dev = [
 requires-dist = [
     { name = "celery", specifier = ">=5.7.0" },
     { name = "fastapi", specifier = ">=0.165.0" },
+    { name = "httpx2", specifier = ">=2.16" },
     { name = "packaging", specifier = ">=24" },
     { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.2" },
     { name = "pydantic-settings", specifier = ">=2.16" },
@@ -127,7 +128,6 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "httpx2", specifier = ">=2.16" },
     { name = "mypy", specifier = ">=1.10" },
     { name = "pytest", specifier = ">=8" },
     { name = "pytest-cov", specifier = ">=5" },
