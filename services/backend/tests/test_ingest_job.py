@@ -26,7 +26,7 @@ class Env:
         self.processed: list[tuple[str, int]] = []
         self.outcome: Derived | Exception = DERIVED
         self.pool.on("set status = 'running'", CLAIMED)
-        self.pool.on("from project_files", [ROW])
+        self.pool.on("status = 'uploaded'", [ROW])
         self.pool.on("count(*)", [{"bad": 0}])
         self.storage.objects[("originals", PATH)] = b"orig"
 
@@ -52,7 +52,7 @@ def run(job_id: str = JOB) -> Any:
 
 def test_a_job_that_is_not_queued_is_left_alone(env: Env) -> None:
     env.pool.answers.clear()
-    env.pool.on("from project_files", [ROW])
+    env.pool.on("status = 'uploaded'", [ROW])
 
     run()
 
@@ -71,7 +71,7 @@ def test_valid_file_gets_derivatives_uploaded_and_recorded(env: Env) -> None:
 
 
 def test_a_plan_is_rendered_from_its_page(env: Env) -> None:
-    env.pool.answers[1] = ("from project_files", [{**ROW, "kind": "plan", "page_index": 2}])
+    env.pool.answers[1] = ("status = 'uploaded'", [{**ROW, "kind": "plan", "page_index": 2}])
 
     run()
 
@@ -90,14 +90,13 @@ def test_validation_error_marks_the_file_invalid_and_the_project_needs_fix(env: 
 
 
 @pytest.mark.parametrize(
-    ("objects", "code"), [({}, "original_missing"), ({("originals", PATH): b"x" * 99}, "file_too_large")]
+    ("objects", "code"),
+    [({}, "original_missing"), ({("originals", PATH): b"x" * (13 * 1024**2)}, "file_too_large")],
 )
 def test_missing_or_oversized_original_is_invalid_without_processing(
     env: Env, objects: dict[tuple[str, str], bytes], code: str
 ) -> None:
     env.storage.objects = objects
-    env.pool.answers[1] = ("from project_files", [{**ROW, "size_bytes": 99}])
-    job_module.MAX_BYTES["photo"] = 10
 
     run()
 
