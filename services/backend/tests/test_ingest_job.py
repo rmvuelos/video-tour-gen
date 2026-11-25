@@ -6,12 +6,12 @@ import pytest
 from celery.exceptions import Retry
 
 import app.worker.ingest as job_module
-from app.worker.ingest import ingest
 from app.errors import ApiError
 from app.files import input_limits
 from app.ingest import IngestError, IngestErrorCode
 from app.ingest.sandbox import Derived, Limits
 from app.storage import TRANSFER_SECONDS
+from app.worker.ingest import ingest
 from tests.fakes import FakePool, FakeStorage
 
 JOB, PROJECT, USER_ID = (str(uuid.uuid4()) for _ in range(3))
