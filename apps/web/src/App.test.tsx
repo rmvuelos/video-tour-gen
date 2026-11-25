@@ -44,6 +44,18 @@ describe('App signed out', () => {
   })
 })
 
+describe('App unknown route', () => {
+  it('shows the not found page, also to signed-out visitors', () => {
+    renderAt('/nope')
+    expect(screen.getByRole('heading', { name: 'Page not found' })).toBeInTheDocument()
+  })
+
+  it('titles the home page', () => {
+    renderAt('/')
+    expect(document.title).toBe('Home · rooma')
+  })
+})
+
 describe('App /dev/ui', () => {
   it('shows the primitives gallery on the dev route', async () => {
     renderAt('/dev/ui')
