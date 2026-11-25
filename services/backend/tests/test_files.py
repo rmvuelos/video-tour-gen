@@ -10,6 +10,7 @@ from app.api import app
 from app.auth import current_user
 from app.db import get_pool
 from app.errors import ApiError
+from app.ratelimit import RateLimiter, files_limiter
 from app.storage import get_storage
 
 URL = f"/projects/{PROJECT_ID}/files"
@@ -38,6 +39,8 @@ def storage(pool: FakePool) -> FakeStorage:
 
 @pytest.fixture
 def client(pool: FakePool, storage: FakeStorage, fake_env: None) -> Iterator[TestClient]:
+    limiter = RateLimiter(1000, 60)  # each test gets a fresh, generous budget
+    app.dependency_overrides[files_limiter] = lambda: limiter
     app.dependency_overrides[get_pool] = lambda: pool
     app.dependency_overrides[get_storage] = lambda: storage
     app.dependency_overrides[current_user] = lambda: USER
@@ -234,3 +237,5 @@ def test_filenames_with_separators_or_invisible_characters_are_422(
     client: TestClient, name: str
 ) -> None:
     assert client.post(URL, json={"files": [photo(filename=name)]}).status_code == 422
+
+
