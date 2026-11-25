@@ -1,10 +1,14 @@
 import { useId, type ReactNode } from 'react'
 import cube from '../assets/icons/cube.svg'
 import { Avatar } from '../components/ui/Avatar'
+import { Breadcrumb } from '../components/ui/Breadcrumb'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
+import { Checklist } from '../components/ui/Checklist'
 import { Eyebrow } from '../components/ui/Eyebrow'
 import { Icon } from '../components/ui/Icon'
+import { SaveStatus } from '../components/ui/SaveStatus'
+import { Stepper } from '../components/ui/Stepper'
 
 // Static class names so Tailwind can see them.
 const PRIMITIVES = [
@@ -124,10 +128,40 @@ export default function UiGallery() {
           <Card className="p-card">Card surface, radius and shadow</Card>
           <Avatar initials="AM" label="Adri M." />
           <Avatar initials="AM" label="Adri M." variant="solid" />
-          <span className="inline-flex size-brand-mark items-center justify-center rounded-panel bg-action text-fg-on-action">
+          <span className="inline-flex size-brand-mark forced-outline items-center justify-center rounded-panel bg-action text-fg-on-action">
             <Icon src={cube} />
           </span>
         </div>
+      </Section>
+      <Section title="Breadcrumb, save status">
+        <Breadcrumb
+          items={[
+            { label: 'Workspace', href: '#' },
+            { label: 'Projects', href: '#' },
+            { label: 'Arles bedroom' },
+          ]}
+        />
+        <SaveStatus status="saved" />
+        <SaveStatus status="saving" />
+        <SaveStatus status="error" />
+      </Section>
+      <Section title="Stepper">
+        {[0, 1, 2].map((current) => (
+          <Stepper key={current} steps={STEPS} current={current} />
+        ))}
+        <p className="text-caption text-fg-muted">In a 750px container (a 1024px window):</p>
+        <div data-testid="stepper-750" className="w-187.5 border border-line">
+          <Stepper steps={STEPS} current={1} />
+        </div>
+      </Section>
+      <Section title="Checklist">
+        <Checklist
+          title="Required inputs"
+          items={[
+            { label: 'Blueprint / sketch', done: true },
+            { label: 'Photo references', done: false },
+          ]}
+        />
       </Section>
     </main>
   )
@@ -138,3 +172,5 @@ const LABELS = {
   secondary: 'Add description',
   cta: 'Continue to preflight',
 }
+
+const STEPS = ['Upload assets', 'AI preflight', 'Generate & export']

@@ -50,6 +50,8 @@
   --color-sand-8: #dccabc;
   --color-sand-9: #dac7ba;
   --color-umber: #886a57;
+  /* Derived, not Figma (no error state in the file): 6:1 on canvas and surface. */
+  --color-brick: #a3412e;
   /* taupe and caramel darkened to the minimum that reaches 4.5:1 as text (see tokens.test.ts):
      taupe-deep on every surface, caramel-deep on the light surfaces. */
   --color-taupe-deep: #62554f;
@@ -77,6 +79,7 @@
      (2.7 to 2.9) icons use fg-accent. fg-accent is not used on control-hover, avatar or step-idle. */
   --color-accent: var(--color-caramel);
   --color-success: var(--color-sage);
+  --color-danger: var(--color-brick);
   --color-action: var(--color-ink);
   --color-action-hover: color-mix(in srgb, var(--color-ink) 85%, var(--color-white));
   --color-focus: var(--color-ink);
@@ -141,6 +144,17 @@
   --spacing-btn-cta-start: 16px;
   --spacing-btn-cta-end: 9px;
   --spacing-icon: 24px;
+  --spacing-icon-sm: 20px;
+  --spacing-step: 30px;
+  --spacing-step-gap: 13px;
+  --spacing-step-label: 240px;
+  --spacing-step-track-lead: 27px;
+  --spacing-step-track: 164px;
+  --spacing-step-track-min: 24px;
+  --spacing-step-pitch: 517px;
+  --spacing-step-track-trail: 43px;
+  --spacing-status-dot: 9px;
+  --spacing-status-gap: 9px;
   --spacing-avatar: 3rem;
   --spacing-avatar-sm: 2.75rem;
   --spacing-brand-mark: 47px;
@@ -158,14 +172,6 @@
     outline-offset: var(--focus-offset);
   }
 
-  /* Masked icons paint with a background, which forced colors would drop. */
-  @media (forced-colors: active) {
-    [data-icon] {
-      forced-color-adjust: none;
-      background-color: ButtonText;
-    }
-  }
-
   @media (prefers-reduced-motion: reduce) {
     *,
     ::before,
@@ -173,5 +179,21 @@
       transition-duration: 0.01ms !important;
       animation-duration: 0.01ms !important;
     }
+  }
+}
+
+/* Unlayered on purpose: a layered rule loses to `bg-current` in the utilities layer. Masked icons
+   paint with a background, which forced colors would drop. */
+@media (forced-colors: active) {
+  [data-icon] {
+    forced-color-adjust: none;
+    background-color: ButtonText;
+  }
+}
+
+/* Filled shapes (step circles, brand mark) vanish in forced colors: give them a system border. */
+@utility forced-outline {
+  @media (forced-colors: active) {
+    border: 1px solid ButtonText;
   }
 }
