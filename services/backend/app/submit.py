@@ -14,7 +14,7 @@ from app.db import Pool, PoolDep, connection
 from app.errors import ERROR_RESPONSES, ApiError, ErrorDetail
 from app.files import LOCK, input_limits
 from app.ratelimit import SubmitLimit
-from app.settings import get_settings
+from app.settings import Settings, get_settings
 from app.storage import ObjectStorage, StorageDep
 from app.validation import not_found, parse_id, printable
 from app.worker import celery_app, configure_celery
@@ -24,9 +24,13 @@ router = APIRouter(prefix="/projects", tags=["submit"], responses=ERROR_RESPONSE
 
 DESCRIPTION_MAX_CHARS = 2000  # mirrors shared/input-limits.json and the column check
 AREA_MAX_M2 = 100_000  # a sanity cap, far above any home
+STALE_QUEUED_SECONDS = 60  # a queued job older than this lost its message (broker hiccup)
+BROKER_TIMEOUT_SECONDS = 3
 # Every query is filtered by user_id: the DB role bypasses RLS (P-5).
 ACTIVE_JOB = (
-    "select id, project_id, status, created_at from jobs where project_id = %s and user_id = %s "
+    "select id, project_id, status, created_at, "
+    f"(status = 'queued' and created_at < now() - interval '{STALE_QUEUED_SECONDS} seconds') "
+    "as stale from jobs where project_id = %s and user_id = %s "
     "and type = 'ingest' and status in ('queued', 'running') limit 1"
 )
 FILES = (
@@ -84,10 +88,21 @@ class Job(BaseModel):
 class Outcome:
     job: Job
     created: bool  # a new job: if the broker refuses it, release the project
+    send: bool  # (re)send the message
+
+
+def configure_publisher(settings: Settings | None = None) -> None:
+    """Broker setup for the API process: a dead Redis must fail fast, not hold a thread."""
+    configure_celery(settings or get_settings())
+    celery_app.conf.broker_connection_timeout = BROKER_TIMEOUT_SECONDS
+    celery_app.conf.broker_transport_options = {
+        "socket_timeout": BROKER_TIMEOUT_SECONDS,
+        "socket_connect_timeout": BROKER_TIMEOUT_SECONDS,
+    }
+    celery_app.conf.task_publish_retry_policy = {"max_retries": 1, "interval_max": 0.2}
 
 
 def enqueue_ingest(job_id: UUID) -> None:
-    configure_celery(get_settings())  # the API process has no worker bootstrap
     celery_app.send_task("ingest", args=[str(job_id)])
 
 
@@ -141,7 +156,11 @@ def _lock_and_find_job(
         raise not_found()
     active = conn.execute(ACTIVE_JOB, (project_id, user_id)).fetchone()
     if active:
-        return Outcome(Job.model_validate(active), created=False)
+        return Outcome(
+            Job.model_validate(active),
+            created=False,
+            send=bool(active.get("stale")) and active["status"] == "queued",
+        )
     if project["status"] != "draft":
         raise ApiError(409, "project_not_draft", "This project was already sent.")
     return None
@@ -171,7 +190,7 @@ def _create_job(
             conn.execute(PAGE, (body.plan_page_index, project_id, user_id))
         conn.execute(SAVE_PROJECT, (body.area_m2, body.description, project_id, user_id))
         job = conn.execute(INSERT_JOB, (project_id, user_id)).fetchone()
-        return Outcome(Job.model_validate(job), created=True)
+        return Outcome(Job.model_validate(job), created=True, send=True)
 
 
 def _send(job: Job) -> None:
@@ -212,10 +231,11 @@ def submit(
                 422, "invalid_files", "The project is not ready to send.", details=errors
             )
         outcome = _create_job(pool, project_uuid, user.id, body, rows)
-    if outcome.created:
+    if outcome.send:
         try:
             _send(outcome.job)
         except ApiError:
-            _release(pool, outcome.job, user.id)
+            if outcome.created:
+                _release(pool, outcome.job, user.id)
             raise
     return outcome.job
