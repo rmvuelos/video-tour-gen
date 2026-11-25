@@ -6,9 +6,12 @@ import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { Checklist } from '../components/ui/Checklist'
 import { Eyebrow } from '../components/ui/Eyebrow'
+import { Field } from '../components/ui/Field'
 import { Icon } from '../components/ui/Icon'
+import { Input } from '../components/ui/Input'
 import { SaveStatus } from '../components/ui/SaveStatus'
 import { Stepper } from '../components/ui/Stepper'
+import { Textarea } from '../components/ui/Textarea'
 
 // Static class names so Tailwind can see them.
 const PRIMITIVES = [
@@ -162,6 +165,29 @@ export default function UiGallery() {
             { label: 'Photo references', done: false },
           ]}
         />
+      </Section>
+      <Section title="Field, input, textarea">
+        <p className="text-caption text-fg-muted">
+          Press Tab to see the focus ring on each control.
+        </p>
+        <Card className="grid grid-cols-2 gap-card-gap p-card">
+          <Field label="Area" help="In square meters">
+            {(p) => <Input {...p} inputMode="decimal" placeholder="e.g. 42" />}
+          </Field>
+          <Field label="Area (error)" error="Enter a number above 0">
+            {(p) => <Input {...p} defaultValue="-3" />}
+          </Field>
+          <Field label="Area (disabled)">
+            {(p) => <Input {...p} disabled defaultValue="42" />}
+          </Field>
+          <Field
+            label="Description"
+            help="Materials, lighting or renovation notes"
+            className="col-span-2"
+          >
+            {(p) => <Textarea {...p} maxLength={2000} defaultValue={'Oak floor. '.repeat(180)} />}
+          </Field>
+        </Card>
       </Section>
     </main>
   )
