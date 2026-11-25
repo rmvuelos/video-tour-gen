@@ -1,5 +1,6 @@
 import { useId, type ReactNode } from 'react'
 import cube from '../assets/icons/cube.svg'
+import { Alert } from '../components/ui/Alert'
 import { Avatar } from '../components/ui/Avatar'
 import { Breadcrumb } from '../components/ui/Breadcrumb'
 import { Button } from '../components/ui/Button'
@@ -9,6 +10,7 @@ import { Eyebrow } from '../components/ui/Eyebrow'
 import { Field } from '../components/ui/Field'
 import { Icon } from '../components/ui/Icon'
 import { Input } from '../components/ui/Input'
+import { ProgressBar } from '../components/ui/ProgressBar'
 import { SaveStatus } from '../components/ui/SaveStatus'
 import { Stepper } from '../components/ui/Stepper'
 import { Textarea } from '../components/ui/Textarea'
@@ -188,6 +190,17 @@ export default function UiGallery() {
             {(p) => <Textarea {...p} maxLength={2000} defaultValue={'Oak floor. '.repeat(180)} />}
           </Field>
         </Card>
+      </Section>
+      <Section title="Alert, progress">
+        <Alert tone="info">Photos are resized to 2048px after upload.</Alert>
+        <Alert tone="success">salon.jpg uploaded.</Alert>
+        <Alert tone="error" action={{ label: 'Retry', onClick: () => {} }}>
+          hall.jpg is 18 MB; the maximum is 12 MB. Reduce the photo or pick another.
+        </Alert>
+        {[0, 40, 100].map((value) => (
+          <ProgressBar key={value} value={value} label={`Uploading, ${value}%`} />
+        ))}
+        <ProgressBar label="Preparing upload" />
       </Section>
     </main>
   )
