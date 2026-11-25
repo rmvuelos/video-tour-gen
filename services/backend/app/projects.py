@@ -1,6 +1,5 @@
-import unicodedata
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 import psycopg
@@ -9,9 +8,10 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, StringConstraints
 
 from app.auth import CurrentUserDep, unauthorized
 from app.db import PoolDep, connection
-from app.errors import ApiError
+from app.errors import ERROR_RESPONSES
+from app.validation import not_found, parse_id, printable
 
-router = APIRouter(prefix="/projects", tags=["projects"])
+router = APIRouter(prefix="/projects", tags=["projects"], responses=ERROR_RESPONSES)
 
 # Every query is parameterised and filtered by user_id: the DB role bypasses RLS (P-5).
 COLUMNS = "id, name, status, area_m2, description, created_at, updated_at"
@@ -25,29 +25,20 @@ LIST = (
 SELECT_ONE = f"select {COLUMNS} from projects where id = %s and user_id = %s"
 
 
-FORBIDDEN_CATEGORIES = {"Cc", "Cf", "Cs"}  # control, format (zero-width, bidi), surrogates
-
-
-def _printable(value: str) -> str:
-    if any(unicodedata.category(c) in FORBIDDEN_CATEGORIES for c in value):
-        raise ValueError("must not contain control or invisible characters")
-    return value
-
-
 class ProjectIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: Annotated[
         str,
         StringConstraints(strip_whitespace=True, min_length=1, max_length=120),
-        AfterValidator(_printable),
+        AfterValidator(printable),
     ]
 
 
 class Project(BaseModel):
     id: UUID
     name: str
-    status: str
+    status: Literal["draft", "ingesting", "ready", "needs_fix"]
     area_m2: float | None  # m2 needs no decimal precision; Decimal would serialise as a string
     description: str | None
     created_at: datetime
@@ -58,10 +49,6 @@ class ProjectPage(BaseModel):
     items: list[Project]
     limit: int
     offset: int
-
-
-def _not_found() -> ApiError:
-    return ApiError(404, "not_found", "Project not found.")
 
 
 @router.post("", status_code=201)
@@ -88,12 +75,9 @@ def list_projects(
 
 @router.get("/{project_id}")
 def get_project(project_id: str, user: CurrentUserDep, pool: PoolDep) -> Project:
-    try:
-        project_uuid = UUID(project_id)
-    except ValueError:  # 404, not 422: do not tell a malformed id from an unknown one
-        raise _not_found() from None
+    project_uuid = parse_id(project_id)
     with connection(pool) as conn:
         row = conn.execute(SELECT_ONE, (project_uuid, user.id)).fetchone()
     if row is None:  # unknown and foreign look the same (anti-IDOR)
-        raise _not_found()
+        raise not_found()
     return Project.model_validate(row)
