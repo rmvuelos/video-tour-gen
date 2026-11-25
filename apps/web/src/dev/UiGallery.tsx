@@ -223,7 +223,7 @@ export default function UiGallery() {
         </div>
         <div className="grid max-w-xl gap-3">
           {CARDS.map((card) => (
-            <FileCard key={card.file.name} onRemove={() => {}} {...card} />
+            <FileCard key={card.file.name} {...card} />
           ))}
         </div>
       </Section>
@@ -238,22 +238,30 @@ const DROPZONES = [
 ] as const
 const retry = { label: 'Retry', onClick: () => {} }
 const jpg = (name: string, size: number) => ({ name, size, type: 'image/jpeg' })
-const CARDS: Omit<ComponentProps<typeof FileCard>, 'onRemove'>[] = [
-  { file: jpg('salon.jpg', 13_002_342), status: 'pending' },
+const noop = () => {}
+const CARDS: ComponentProps<typeof FileCard>[] = [
+  { file: jpg('salon.jpg', 13_002_342), onRemove: noop, status: 'pending' },
   {
     file: jpg('a-very-long-name-for-the-living-room-south-wall-photo.jpg', 4_200_000),
+    onRemove: noop,
     status: 'uploading',
     progress: 42,
   },
-  { file: { name: 'plan.pdf', size: 2_400_000, type: 'application/pdf' }, status: 'uploaded' },
+  {
+    file: { name: 'plan.pdf', size: 2_400_000, type: 'application/pdf' },
+    onRemove: noop,
+    status: 'uploaded',
+  },
   {
     file: jpg('hall.jpg', 4_200_000),
+    onRemove: noop,
     status: 'error',
     error: 'Upload failed. Check your connection.',
     action: retry,
   },
   {
     file: jpg('huge.jpg', 18_900_000),
+    onRemove: noop,
     status: 'error',
     error: 'Weighs 18 MB; the maximum is 12 MB. Pick another.',
     action: { ...retry, label: 'Replace' },
