@@ -143,7 +143,7 @@ def _encode(image: Image.Image, fmt: Literal["JPEG", "PNG"]) -> bytes:
     out = io.BytesIO()
     if fmt == "JPEG":
         image.save(out, "JPEG", quality=JPEG_QUALITY)
-    else:  # default compress_level (6): a 16 MP line plan encodes in ~0.8 s, level 3 only saves 0.4 s
+    else:  # default compress_level 6: ~0.8 s for a 16 MP line plan; level 3 saves 0.4 s
         image.save(out, "PNG")
     return out.getvalue()
 
