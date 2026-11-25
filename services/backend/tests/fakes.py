@@ -16,15 +16,10 @@ class FakePool:
         self.answers: list[tuple[str, list[dict[str, Any]]]] = []
         self.calls: list[tuple[str, tuple[Any, ...]]] = []
         self._last: list[dict[str, Any]] = []
-        self.sequences: dict[str, list[list[dict[str, Any]]]] = {}
         self.open_connections = 0
 
     def on(self, fragment: str, rows: list[dict[str, Any]]) -> None:
         self.answers.append((fragment, rows))
-
-    def on_sequence(self, fragment: str, *answers: list[dict[str, Any]]) -> None:
-        """Successive answers for the same SQL; the last one repeats."""
-        self.sequences[fragment] = list(answers)
 
     def ran(self, fragment: str) -> list[tuple[Any, ...]]:
         return [params for sql, params in self.calls if fragment in sql]
@@ -39,10 +34,6 @@ class FakePool:
 
     def execute(self, sql: str, params: tuple[Any, ...] = ()) -> "FakePool":
         self.calls.append((sql, params))
-        queued = next((q for fragment, q in self.sequences.items() if fragment in sql), None)
-        if queued is not None:
-            self._last = queued.pop(0) if len(queued) > 1 else queued[0]
-            return self
         self._last = next((rows for fragment, rows in self.answers if fragment in sql), [])
         return self
 
