@@ -17,7 +17,10 @@ function Home() {
   return (
     <main className="flex items-center justify-between p-8">
       <h1 className="text-title font-semibold">rooma</h1>
-      <Button variant="secondary" onClick={() => void getSupabase().auth.signOut()}>
+      <Button
+        variant="secondary"
+        onClick={() => void getSupabase().auth.signOut({ scope: 'local' })}
+      >
         Sign out
       </Button>
     </main>
@@ -27,8 +30,8 @@ function Home() {
 export function App() {
   return (
     <Routes>
-      <Route path="/login" element={<AuthPage mode="login" />} />
-      <Route path="/signup" element={<AuthPage mode="signup" />} />
+      <Route path="/login" element={<AuthPage key="login" mode="login" />} />
+      <Route path="/signup" element={<AuthPage key="signup" mode="signup" />} />
       {UiGallery && (
         <Route
           path="/dev/ui"
