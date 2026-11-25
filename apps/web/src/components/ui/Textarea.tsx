@@ -1,10 +1,17 @@
 import { useId, useState, type ComponentProps } from 'react'
 import { FIELD_CLASS } from './Input'
 
-// The live region only speaks in the last 10% of the limit: announcing every key would be noise.
-const WARN_RATIO = 0.1
+// The live region only changes at these remaining counts: announcing every key would be noise.
+const THRESHOLDS = [200, 100, 50, 10, 0]
 
-/** `className` goes to the wrapper (layout). With `maxLength` it shows "n / max" as the description. */
+function announcement(remaining: number): string {
+  const step = THRESHOLDS.findLast((t) => remaining <= t)
+  if (step === undefined) return ''
+  if (step === 0) return 'Character limit reached'
+  return `${step} ${step === 1 ? 'character' : 'characters'} or fewer remaining`
+}
+
+/** With `maxLength` it shows "n / max" as the description. */
 export function Textarea({
   className = '',
   maxLength,
@@ -17,12 +24,11 @@ export function Textarea({
   const counterId = useId()
   const [typed, setTyped] = useState(String(defaultValue ?? '').length)
   const length = value === undefined ? typed : String(value).length
-  const remaining = maxLength === undefined ? undefined : maxLength - length
-  const warn = remaining !== undefined && remaining <= maxLength! * WARN_RATIO
+  const remaining = maxLength === undefined ? undefined : Math.max(0, maxLength - length)
   return (
-    <div className={`flex flex-col gap-1 ${className}`}>
+    <div className="flex flex-col gap-1">
       <textarea
-        className={`min-h-32 resize-y py-3 ${FIELD_CLASS}`}
+        className={`min-h-32 resize-y py-3 ${FIELD_CLASS} ${className}`}
         maxLength={maxLength}
         value={value}
         defaultValue={defaultValue}
@@ -30,7 +36,7 @@ export function Textarea({
           [describedBy, maxLength !== undefined && counterId].filter(Boolean).join(' ') || undefined
         }
         onChange={(e) => {
-          setTyped(e.target.value.length)
+          if (value === undefined) setTyped(e.target.value.length)
           onChange?.(e)
         }}
         {...rest}
@@ -41,7 +47,7 @@ export function Textarea({
             {length.toLocaleString('en-US')} / {maxLength.toLocaleString('en-US')}
           </p>
           <span role="status" className="sr-only">
-            {warn && `${remaining} characters remaining`}
+            {remaining !== undefined && announcement(remaining)}
           </span>
         </>
       )}
