@@ -14,6 +14,7 @@ from app.errors import ApiError
 WINDOW_SECONDS = 60
 FILES_PER_WINDOW = 30
 SUBMITS_PER_WINDOW = 10
+READS_PER_WINDOW = 120  # polling every second or two, with slack
 
 
 class RateLimiter:
@@ -67,6 +68,11 @@ def submit_limiter() -> RateLimiter:
     return RateLimiter(SUBMITS_PER_WINDOW, WINDOW_SECONDS)
 
 
+@lru_cache
+def read_limiter() -> RateLimiter:
+    return RateLimiter(READS_PER_WINDOW, WINDOW_SECONDS)
+
+
 def _guard(provider: Callable[[], RateLimiter], scope: str) -> Callable[..., None]:
     def check(user: CurrentUserDep, limiter: Annotated[RateLimiter, Depends(provider)]) -> None:
         limiter.hit(str(user.id), scope)
@@ -76,3 +82,4 @@ def _guard(provider: Callable[[], RateLimiter], scope: str) -> Callable[..., Non
 
 FilesLimit = Annotated[None, Depends(_guard(files_limiter, "files"))]
 SubmitLimit = Annotated[None, Depends(_guard(submit_limiter, "submit"))]
+ReadLimit = Annotated[None, Depends(_guard(read_limiter, "read"))]

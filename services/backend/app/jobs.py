@@ -9,9 +9,10 @@ from app.auth import CurrentUserDep
 from app.db import PoolDep, connection
 from app.errors import ERROR_RESPONSES, ApiError
 from app.files import LOCK
-from app.ratelimit import SubmitLimit
+from app.ratelimit import ReadLimit, SubmitLimit
 from app.submit import FAIL_JOB, INSERT_JOB, Job, send_job
 from app.validation import not_found, parse_id
+from app.worker.limits import STALE_RUNNING_SECONDS
 
 router = APIRouter(prefix="/projects", tags=["jobs"], responses=ERROR_RESPONSES)
 
@@ -19,12 +20,20 @@ router = APIRouter(prefix="/projects", tags=["jobs"], responses=ERROR_RESPONSES)
 # rows, so it answers like an unknown one (anti-IDOR).
 LATEST = (
     "select id, project_id, status, error_code, attempts, created_at, started_at, finished_at, "
-    "duration_ms from jobs where project_id = %s and user_id = %s and type = 'ingest' "
-    "order by created_at desc limit 1"
+    "duration_ms, (status = 'running' and claimed_at < "
+    f"now() - make_interval(secs => {STALE_RUNNING_SECONDS})) as stale "
+    "from jobs where project_id = %s and user_id = %s and type = 'ingest' "
+    "order by created_at desc, id desc limit 1"
+)
+# The worker lost this job (see worker.ingest.RECLAIMABLE): free the project's one active slot.
+ABANDON = (
+    "update jobs set status = 'failed', error_code = 'worker_lost', finished_at = now() "
+    "where id = %s and user_id = %s and status = 'running'"
 )
 FILES = (
     "select id, kind, status, error_code, width, height from project_files "
-    "where project_id = %s and user_id = %s order by created_at"
+    "where project_id = %s and user_id = %s "
+    "order by (kind = 'plan') desc, created_at, id"
 )
 
 
@@ -51,7 +60,7 @@ class JobState(BaseModel):
 
 
 @router.get("/{project_id}/jobs/latest")
-def latest_job(project_id: str, user: CurrentUserDep, pool: PoolDep) -> JobState:
+def latest_job(project_id: str, user: CurrentUserDep, pool: PoolDep, _limit: ReadLimit) -> JobState:
     project_uuid = parse_id(project_id)
     with connection(pool) as conn:
         job = conn.execute(LATEST, (project_uuid, user.id)).fetchone()
@@ -69,8 +78,15 @@ def retry_ingest(project_id: str, user: CurrentUserDep, pool: PoolDep, _limit: S
         if project is None:
             raise not_found()
         last = conn.execute(LATEST, (project_uuid, user.id)).fetchone()
-        if project["status"] != "ingesting" or last is None or last["status"] != "failed":
+        lost = last is not None and last["status"] == "running" and last["stale"]
+        if (
+            project["status"] != "ingesting"
+            or last is None
+            or not (lost or last["status"] == "failed")
+        ):
             raise ApiError(409, "job_not_failed", "There is no failed job to retry.")
+        if lost:
+            conn.execute(ABANDON, (last["id"], user.id))
         job = Job.model_validate(conn.execute(INSERT_JOB, (project_uuid, user.id)).fetchone())
     try:
         send_job(job)
