@@ -234,5 +234,3 @@ def test_filenames_with_separators_or_invisible_characters_are_422(
     client: TestClient, name: str
 ) -> None:
     assert client.post(URL, json={"files": [photo(filename=name)]}).status_code == 422
-
-
