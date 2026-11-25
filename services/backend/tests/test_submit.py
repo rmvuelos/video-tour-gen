@@ -176,6 +176,10 @@ def test_a_project_that_is_neither_draft_nor_active_is_409(client: TestClient, e
     assert client.post(URL, json={}).status_code == 409
 
 
+
+
+
+
 def test_storage_is_checked_without_holding_a_database_connection(
     client: TestClient, env: Env
 ) -> None:
@@ -186,12 +190,63 @@ def test_storage_is_checked_without_holding_a_database_connection(
     assert env.storage.calls_in_transaction == []
 
 
+def test_files_that_change_while_storage_is_checked_make_it_a_409(
+    client: TestClient, env: Env
+) -> None:
+    before = [file_row("plan")] + [file_row("photo") for _ in range(3)]
+    env.files(*before)
+    env.pool.on_sequence("from project_files", before, before + [file_row("photo")])
+
+    response = client.post(URL, json={})
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "files_changed"
+    assert env.sent == [] and env.pool.ran("insert into jobs") == []
+
+
+def test_a_job_created_by_a_concurrent_submit_is_returned_not_duplicated(
+    client: TestClient, env: Env
+) -> None:
+    env.good_set()
+    env.pool.on_sequence("from jobs", [], [JOB])
+
+    response = client.post(URL, json={})
+
+    assert response.status_code == 202 and response.json()["id"] == str(JOB["id"])
+    assert env.pool.ran("insert into jobs") == [] and env.sent == []
+
+
 def test_two_plans_get_their_own_message(client: TestClient, env: Env) -> None:
     env.files(file_row("plan"), file_row("plan"), *[file_row("photo") for _ in range(3)])
 
     response = client.post(URL, json={})
 
     assert codes(response) == ["too_many_plans"]
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        b'{"area_m2": Infinity}',
+        b'{"area_m2": NaN}',
+        b'{"area_m2": 100001}',
+        rb'{"description": "a\u0000b"}',
+    ],
+)
+def test_non_finite_huge_or_control_character_details_are_422(
+    client: TestClient, env: Env, raw: bytes
+) -> None:
+    env.good_set()
+
+    response = client.post(URL, content=raw, headers={"content-type": "application/json"})
+
+    assert response.status_code == 422
+
+
+def test_a_description_may_have_line_breaks(client: TestClient, env: Env) -> None:
+    env.good_set()
+
+    assert client.post(URL, json={"description": "uno" + chr(10) + "dos"}).status_code == 202
 
 
 def test_details_that_were_not_sent_do_not_erase_the_saved_ones(
@@ -203,3 +258,13 @@ def test_details_that_were_not_sent_do_not_erase_the_saved_ones(
 
     sql = next(sql for sql, _ in env.pool.calls if "set area_m2" in sql)
     assert "coalesce(%s, area_m2)" in sql and "coalesce(%s, description)" in sql
+
+
+
+
+
+
+
+
+
+
