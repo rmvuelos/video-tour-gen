@@ -34,7 +34,9 @@ def test_error_details_are_serialised_without_empty_fields() -> None:
 
     @probe.get("/boom")
     def boom() -> None:
-        raise ApiError(422, "invalid_files", "Bad.", details=[ErrorDetail(code="x", message="m", index=1)])
+        raise ApiError(
+            422, "invalid_files", "Bad.", details=[ErrorDetail(code="x", message="m", index=1)]
+        )
 
     body = TestClient(probe).get("/boom").json()
 
