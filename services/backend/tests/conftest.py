@@ -75,6 +75,28 @@ def client(local_stack_only: None) -> Iterator[TestClient]:
     get_settings.cache_clear()
 
 
+def _purge_objects(user_id: str) -> None:
+    """Delete what a test user left in Storage: objects live at {user}/{project}/{file}."""
+    base = os.environ["SUPABASE_URL"] + "/storage/v1"
+    secret = {"apikey": os.environ["SUPABASE_SECRET_KEY"]}
+
+    def names(prefix: str) -> list[str]:
+        body = {"prefix": prefix, "limit": 1000}
+        listed = httpx.post(
+            f"{base}/object/list/originals", headers=secret, json=body, timeout=TIMEOUT
+        )
+        listed.raise_for_status()
+        return [item["name"] for item in listed.json()]
+
+    for project in names(user_id):
+        paths = [f"{user_id}/{project}/{name}" for name in names(f"{user_id}/{project}")]
+        if paths:
+            body = {"prefixes": paths}
+            httpx.request(
+                "DELETE", f"{base}/object/originals", headers=secret, json=body, timeout=TIMEOUT
+            )
+
+
 @pytest.fixture(scope="module")
 def make_user(local_stack_only: None) -> Iterator[Callable[[], Account]]:
     """Creates confirmed users through the Auth admin API and logs them in with a password."""
@@ -98,6 +120,7 @@ def make_user(local_stack_only: None) -> Iterator[Callable[[], Account]]:
         return Account(created[-1], {"Authorization": f"Bearer {login.json()['access_token']}"})
 
     yield make
-    for user_id in created:  # projects go with the user (on delete cascade)
+    for user_id in created:  # projects go with the user (on delete cascade); Storage does not
+        _purge_objects(user_id)
         deleted = httpx.delete(f"{auth_url}/admin/users/{user_id}", headers=secret, timeout=TIMEOUT)
         deleted.raise_for_status()

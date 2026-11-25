@@ -1,5 +1,6 @@
 """Upload flow against the local Supabase: real signed URLs, Storage and database."""
 
+import os
 from collections.abc import Callable
 from typing import Any
 
@@ -8,6 +9,9 @@ import pytest
 from conftest import Account
 from fastapi.testclient import TestClient
 
+from app.api import app
+from app.errors import ApiError
+from app.storage import get_storage
 from app.worker import celery_app
 
 pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("local_stack_only")]
@@ -78,3 +82,90 @@ def test_missing_and_wrong_size_objects_block_the_submit(
         (targets[3]["file_id"], "missing_object"),
     }
     assert client.get(f"/projects/{project_id}", headers=ana.headers).json()["status"] == "draft"
+
+
+def _upload_all(targets: list[Any], sizes: list[int]) -> None:
+    for target, size in zip(targets, sizes, strict=True):
+        _put(target["upload_url"], target["headers"], b"x" * size)
+
+
+def test_a_signed_url_cannot_overwrite_an_uploaded_object(
+    client: TestClient, make_user: Callable[[], Account], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sent: list[Any] = []
+    monkeypatch.setattr(celery_app, "send_task", lambda name, args: sent.append(args))
+    ana = make_user()
+    project_id, targets = _register(client, ana, [20, 30, 30, 30])
+    _upload_all(targets, [20, 30, 30, 30])
+
+    second = httpx.put(
+        targets[0]["upload_url"].replace("127.0.0.1", "host.docker.internal"),
+        headers=targets[0]["headers"],
+        content=b"y" * 99,
+        timeout=TIMEOUT,
+    )
+
+    assert second.status_code in (400, 409)
+    submit = client.post(f"/projects/{project_id}/submit", json={}, headers=ana.headers)
+    assert submit.status_code == 202  # the declared size still matches: nothing was replaced
+
+
+def test_delete_removes_the_real_object(
+    client: TestClient, make_user: Callable[[], Account]
+) -> None:
+    ana = make_user()
+    project_id, targets = _register(client, ana, [20, 30, 30, 30])
+    _upload_all(targets, [20, 30, 30, 30])
+    path = f"{ana.id}/{project_id}/{targets[1]['file_id']}"
+    info = f"{os.environ['SUPABASE_URL']}/storage/v1/object/info/originals/{path}"
+    secret = {"apikey": os.environ["SUPABASE_SECRET_KEY"]}
+    assert httpx.get(info, headers=secret, timeout=TIMEOUT).status_code == 200
+
+    deleted = client.delete(
+        f"/projects/{project_id}/files/{targets[1]['file_id']}", headers=ana.headers
+    )
+
+    assert deleted.status_code == 204
+    assert httpx.get(info, headers=secret, timeout=TIMEOUT).status_code in (400, 404)
+
+
+def test_a_non_finite_area_is_rejected(
+    client: TestClient, make_user: Callable[[], Account]
+) -> None:
+    ana = make_user()
+    project = client.post("/projects", json={"name": "Casa"}, headers=ana.headers).json()
+
+    response = client.post(
+        f"/projects/{project['id']}/submit",
+        content=b'{"area_m2": Infinity}',
+        headers={**ana.headers, "content-type": "application/json"},
+    )
+
+    assert response.status_code == 422
+
+
+class _BrokenSigner:
+    def signed_upload_url(self, path: str) -> str:
+        raise ApiError(502, "storage_unavailable", "down")
+
+
+def test_a_signing_failure_leaves_no_rows_taking_up_slots(
+    client: TestClient, make_user: Callable[[], Account]
+) -> None:
+    ana = make_user()
+    project = client.post("/projects", json={"name": "Casa"}, headers=ana.headers).json()
+    url = f"/projects/{project['id']}/files"
+    full = [{"kind": "plan", "filename": "p.pdf", "size": 5, "mime": "application/pdf"}] + [
+        {"kind": "photo", "filename": f"{i}.jpg", "size": 5, "mime": "image/jpeg"}
+        for i in range(10)
+    ]
+    app.dependency_overrides[get_storage] = _BrokenSigner
+    try:
+        failed = client.post(url, json={"files": full}, headers=ana.headers)
+    finally:
+        app.dependency_overrides.pop(get_storage)
+
+    retried = client.post(url, json={"files": full}, headers=ana.headers)
+
+    assert failed.status_code == 502
+    assert retried.status_code == 201  # the maximum fits again: the failed rows are gone
