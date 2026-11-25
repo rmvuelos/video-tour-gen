@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FileCard } from './FileCard'
 
 const file = { name: 'salon.jpg', size: 13_002_342, type: 'image/jpeg' }
@@ -39,7 +39,7 @@ describe('FileCard', () => {
     expect(screen.getByText(/42%/)).toBeInTheDocument()
   })
 
-  it('shows what failed and offers the action', async () => {
+  it('shows what failed in text with the file name, without interrupting', async () => {
     const onClick = vi.fn()
     render(
       <FileCard
@@ -49,8 +49,55 @@ describe('FileCard', () => {
         action={{ label: 'Retry', onClick }}
       />,
     )
-    expect(screen.getByRole('alert')).toHaveTextContent('Upload failed. Check your connection.')
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Retry' }))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByText(/Upload failed/)).toHaveTextContent('salon.jpg: Upload failed.')
+    const retry = screen.getByRole('button', { name: 'Retry salon.jpg' })
+    expect(retry).toHaveAccessibleDescription('salon.jpg: Upload failed. Check your connection.')
+    await userEvent.setup().click(retry)
     expect(onClick).toHaveBeenCalledOnce()
+  })
+
+  it.each([
+    [41.6, '42%'],
+    [150, '100%'],
+    [-3, '0%'],
+  ])('shows progress %s as %s', (progress, text) => {
+    render(<FileCard {...base} status="uploading" progress={progress} />)
+    expect(screen.getByText(new RegExp(`Uploading ${text}`))).toBeInTheDocument()
+  })
+
+  it('requires the message of an error', () => {
+    // @ts-expect-error an error card needs `error`
+    render(<FileCard {...base} status="error" />)
+  })
+
+  describe('with a File and no preview', () => {
+    const created = vi.fn(() => 'blob:own')
+    const revoked = vi.fn()
+    beforeEach(() => {
+      Object.assign(URL, { createObjectURL: created, revokeObjectURL: revoked })
+      created.mockClear()
+      revoked.mockClear()
+    })
+
+    it('creates its own thumbnail URL and revokes it on unmount', () => {
+      const photo = new File(['x'], 'salon.jpg', { type: 'image/jpeg' })
+      const { container, unmount } = render(
+        <FileCard file={photo} onRemove={() => {}} status="pending" />,
+      )
+      expect(container.querySelector('img')).toHaveAttribute('src', 'blob:own')
+      unmount()
+      expect(revoked).toHaveBeenCalledWith('blob:own')
+    })
+
+    it('leaves a caller-owned preview alone', () => {
+      const photo = new File(['x'], 'salon.jpg', { type: 'image/jpeg' })
+      const { unmount } = render(
+        <FileCard file={photo} preview="blob:mine" onRemove={() => {}} status="pending" />,
+      )
+      unmount()
+      expect(created).not.toHaveBeenCalled()
+      expect(revoked).not.toHaveBeenCalled()
+    })
   })
 })
