@@ -6,13 +6,13 @@ from typing import Any
 
 import httpx2 as httpx
 import pytest
-from conftest import Account
 from fastapi.testclient import TestClient
 
 from app.api import app
 from app.errors import ApiError
 from app.storage import get_storage
 from app.worker import celery_app
+from tests.conftest import Account
 
 pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("local_stack_only")]
 TIMEOUT = 10

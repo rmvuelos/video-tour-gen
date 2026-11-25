@@ -4,7 +4,6 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
-from fakes import PROJECT_ID, USER, FakePool, FakeStorage
 from fastapi.testclient import TestClient
 
 from app.api import app
@@ -14,6 +13,7 @@ from app.ratelimit import RateLimiter, submit_limiter
 from app.storage import get_storage
 from app.submit import configure_publisher
 from app.worker import celery_app
+from tests.fakes import PROJECT_ID, USER, FakePool, FakeStorage
 
 URL = f"/projects/{PROJECT_ID}/submit"
 JOB = {
