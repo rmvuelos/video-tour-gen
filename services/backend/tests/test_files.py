@@ -3,7 +3,6 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from fakes import PROJECT_ID, USER, FakePool, FakeStorage
 from fastapi.testclient import TestClient
 
 from app.api import app
@@ -12,6 +11,7 @@ from app.db import get_pool
 from app.errors import ApiError
 from app.ratelimit import RateLimiter, files_limiter
 from app.storage import get_storage
+from tests.fakes import PROJECT_ID, USER, FakePool, FakeStorage
 
 URL = f"/projects/{PROJECT_ID}/files"
 MIB = 1024 * 1024

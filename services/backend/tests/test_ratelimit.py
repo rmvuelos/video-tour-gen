@@ -3,7 +3,6 @@ from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
-from fakes import PROJECT_ID, USER, FakePool, FakeStorage
 from fastapi.testclient import TestClient
 
 from app.api import app
@@ -12,6 +11,7 @@ from app.db import get_pool
 from app.errors import ApiError
 from app.ratelimit import RateLimiter, files_limiter
 from app.storage import get_storage
+from tests.fakes import PROJECT_ID, USER, FakePool, FakeStorage
 
 LIMIT = 3
 BODY = {"files": [{"kind": "photo", "filename": "a.jpg", "size": 10, "mime": "image/jpeg"}]}

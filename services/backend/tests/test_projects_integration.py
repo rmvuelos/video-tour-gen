@@ -4,8 +4,9 @@ import uuid
 from collections.abc import Callable
 
 import pytest
-from conftest import Account
 from fastapi.testclient import TestClient
+
+from tests.conftest import Account
 
 pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("local_stack_only")]
 
