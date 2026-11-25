@@ -1,6 +1,6 @@
 import { useId, type ComponentProps, type ReactNode } from 'react'
 
-export type ControlProps = {
+type ControlProps = {
   id: string
   'aria-describedby'?: string | undefined
   'aria-invalid'?: true | undefined
