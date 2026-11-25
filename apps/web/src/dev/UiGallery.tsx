@@ -1,4 +1,6 @@
 import { useId, type ReactNode } from 'react'
+import gridSm from '../assets/icons/grid-sm.svg'
+import image from '../assets/icons/image.svg'
 import cube from '../assets/icons/cube.svg'
 import { Alert } from '../components/ui/Alert'
 import { Avatar } from '../components/ui/Avatar'
@@ -6,6 +8,7 @@ import { Breadcrumb } from '../components/ui/Breadcrumb'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { Checklist } from '../components/ui/Checklist'
+import { Dropzone } from '../components/ui/Dropzone'
 import { Eyebrow } from '../components/ui/Eyebrow'
 import { Field } from '../components/ui/Field'
 import { Icon } from '../components/ui/Icon'
@@ -215,10 +218,31 @@ export default function UiGallery() {
         ))}
         <ProgressBar label="Preparing upload" />
       </Section>
+      <Section title="Dropzone">
+        <p className="text-caption text-fg-muted">
+          Drag a file over a zone for the drag state; a .heic or a large file shows the rejection.
+        </p>
+        <div className="grid grid-cols-2 gap-card-gap">
+          {DROPZONES.map(([title, help, buttonLabel, icon, mb, maxFiles]) => (
+            <Dropzone
+              key={title}
+              {...{ title, help, buttonLabel, icon, maxFiles }}
+              accept={{ 'image/jpeg': [], 'image/png': [] }}
+              maxSize={mb * MB}
+              onFilesAccepted={() => {}}
+            />
+          ))}
+        </div>
+      </Section>
     </main>
   )
 }
 
+const MB = 1024 * 1024
+const DROPZONES = [
+  ['Floor plan or blueprint', 'PDF, PNG or JPG, up to 20 MB', 'Browse files', gridSm, 20, 1],
+  ['Room photos', '3 to 10 photos, JPG, PNG or WebP, up to 12 MB', 'Choose media', image, 12, 10],
+] as const
 const LABELS = {
   primary: 'Browse files',
   secondary: 'Add description',

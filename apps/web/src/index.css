@@ -135,6 +135,7 @@
   --dash-length: 10px;
   --dash-gap: 12px;
   --dash-inset: 10px;
+  --dash-corner: 5px;
   --focus-width: 2px;
   --focus-offset: 2px;
 
@@ -150,6 +151,9 @@
   /* Derived: input height = soft button height; progress bar thickness. */
   --spacing-field: 47px;
   --spacing-progress: 8px;
+  --spacing-icon-lg: 34px;
+  --spacing-tile: 90px;
+  --spacing-dropzone: 341px;
   --spacing-icon: 24px;
   --spacing-icon-nav: 21px;
   --spacing-icon-sm: 20px;
@@ -214,5 +218,51 @@
 @utility forced-outline {
   @media (forced-colors: active) {
     border: 1px solid ButtonText;
+  }
+}
+
+/* Dropzone border (Figma: 2px dashes of 10, gap 12, inset 10) from gradients; dragging: solid. */
+.dash-border {
+  --dash-color: var(--color-line-dashed);
+  --dash-h: repeating-linear-gradient(
+    90deg,
+    var(--dash-color) 0 var(--dash-length),
+    transparent var(--dash-length) calc(var(--dash-length) + var(--dash-gap))
+  );
+  --dash-v: repeating-linear-gradient(
+    180deg,
+    var(--dash-color) 0 var(--dash-length),
+    transparent var(--dash-length) calc(var(--dash-length) + var(--dash-gap))
+  );
+  position: absolute;
+  inset: var(--dash-inset);
+  pointer-events: none;
+  background:
+    var(--dash-h) left var(--dash-corner) top / calc(100% - 2 * var(--dash-corner))
+      var(--dash-width) no-repeat,
+    var(--dash-h) left var(--dash-corner) bottom / calc(100% - 2 * var(--dash-corner))
+      var(--dash-width) no-repeat,
+    var(--dash-v) left 0 top var(--dash-corner) / var(--dash-width)
+      calc(100% - 2 * var(--dash-corner)) no-repeat,
+    var(--dash-v) right 0 top var(--dash-corner) / var(--dash-width)
+      calc(100% - 2 * var(--dash-corner)) no-repeat;
+}
+.dash-border[data-dash='active'],
+.dash-border[data-dash='reject'] {
+  --dash-color: var(--color-field-border);
+  background: none;
+  border: var(--dash-width) solid var(--dash-color);
+  border-radius: calc(var(--radius-card) - var(--dash-inset));
+}
+.dash-border[data-dash='reject'] {
+  --dash-color: var(--color-danger);
+}
+@media (forced-colors: active) {
+  .dash-border {
+    background: none;
+    border: var(--dash-width) dashed CanvasText;
+  }
+  .dash-border[data-dash] {
+    border-style: solid;
   }
 }

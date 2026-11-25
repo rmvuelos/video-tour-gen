@@ -106,4 +106,10 @@ describe('reduced motion', () => {
   it('runs animations once, not forever', () => {
     expect(css).toMatch(/animation-iteration-count:\s*1\s*!important/)
   })
+
+  it('keeps the dragging dropzone border solid in forced colors', () => {
+    expect(css).toMatch(
+      /forced-colors: active\) \{[\s\S]*?\.dash-border\[data-dash\] \{\s*border-style: solid/,
+    )
+  })
 })
