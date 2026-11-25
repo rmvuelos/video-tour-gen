@@ -36,6 +36,15 @@ describe('Field', () => {
     expect(screen.getByLabelText('A').id).not.toBe(screen.getByLabelText('B').id)
   })
 
+  it('marks the control required and says so in the label', () => {
+    render(
+      <Field label="Area" required>
+        {(props) => <Input {...props} />}
+      </Field>,
+    )
+    expect(screen.getByRole('textbox', { name: 'Area (required)' })).toBeRequired()
+  })
+
   it('does not let a disabled input take typing', async () => {
     render(<Input aria-label="Area" disabled />)
     await userEvent.setup().type(screen.getByLabelText('Area'), '12')
@@ -54,7 +63,29 @@ describe('Textarea', () => {
 
   it('announces the remaining characters politely near the limit', () => {
     render(<Textarea aria-label="Description" maxLength={20} defaultValue={'x'.repeat(18)} />)
-    expect(screen.getByRole('status')).toHaveTextContent('2 characters remaining')
+    expect(screen.getByRole('status')).toHaveTextContent('10 characters or fewer remaining')
+  })
+
+  it('keeps the same announcement between thresholds and says when the limit is reached', () => {
+    const text = (n: number) => {
+      const { unmount } = render(
+        <Textarea aria-label="D" maxLength={300} value={'x'.repeat(n)} onChange={() => {}} />,
+      )
+      const said = screen.getByRole('status').textContent
+      unmount()
+      return said
+    }
+    expect(text(99)).toBe('')
+    expect(text(101)).toBe('200 characters or fewer remaining')
+    expect(text(150)).toBe(text(101))
+    expect(text(250)).toBe('50 characters or fewer remaining')
+    expect(text(300)).toBe('Character limit reached')
+    expect(text(320)).toBe('Character limit reached')
+  })
+
+  it('puts className on the textarea, like Input', () => {
+    render(<Textarea aria-label="D" className="col-span-2" />)
+    expect(screen.getByLabelText('D')).toHaveClass('col-span-2')
   })
 
   it('follows a controlled value and keeps the description passed by a Field', () => {
