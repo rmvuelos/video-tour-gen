@@ -50,6 +50,7 @@ class FakeStorage:
         self.calls_in_transaction: list[str] = []  # network calls made while a connection is open
         self.sign_error: Exception | None = None
         self.delete_error: Exception | None = None
+        self.sizes: dict[str, int] = {}
         self.signed: list[str] = []
         self.deleted: list[tuple[str, list[str]]] = []
         self.prefixes: list[tuple[str, str]] = []
@@ -64,6 +65,10 @@ class FakeStorage:
             raise self.sign_error
         self.signed.append(path)
         return f"http://public.test/upload/{path}?token=t"
+
+    def size(self, path: str) -> int | None:
+        self._note("size")
+        return self.sizes.get(path)
 
     def delete(self, bucket: str, paths: list[str]) -> None:
         self._note("delete")
