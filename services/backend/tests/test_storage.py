@@ -90,3 +90,38 @@ def test_unreachable_storage_is_a_502() -> None:
         make(httpx.MockTransport(refuse)).size(PATH)
 
     assert caught.value.code == "storage_unavailable"
+
+
+def test_only_a_404_body_inside_a_400_means_no_such_object() -> None:
+    missing = make(transport(400, {"statusCode": "404", "error": "not_found"}, []))
+    other = make(transport(400, {"statusCode": "400", "error": "Invalid key"}, []))
+
+    assert missing.size(PATH) is None
+    with pytest.raises(ApiError) as caught:
+        other.size(PATH)
+    assert caught.value.status_code == 502
+
+
+@pytest.mark.parametrize("body", [{"nope": 1}, "not-an-object", {"size": "big"}])
+def test_an_unexpected_success_body_is_a_502(body: object) -> None:
+    with pytest.raises(ApiError) as caught:
+        make(transport(200, body, [])).size(PATH)
+
+    assert caught.value.code == "storage_unavailable"
+
+
+def test_a_non_json_success_body_is_a_502() -> None:
+    client = make(httpx.MockTransport(lambda request: httpx.Response(200, content=b"<html>")))
+
+    with pytest.raises(ApiError) as caught:
+        client.signed_upload_url(PATH)
+
+    assert caught.value.status_code == 502
+
+
+def test_timeouts_are_short_and_the_client_can_be_closed() -> None:
+    client = make(transport(200, {}, []))
+
+    assert client._http.timeout == httpx.Timeout(10, connect=3)
+    client.close()
+    assert client._http.is_closed
