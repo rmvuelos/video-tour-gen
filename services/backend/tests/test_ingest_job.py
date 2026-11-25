@@ -60,7 +60,7 @@ def test_a_job_that_is_not_queued_is_left_alone(env: Env) -> None:
 
     run()
 
-    assert env.processed == [] and not env.pool.ran("finished_at")
+    assert env.processed == [] and not env.pool.ran("update jobs set status = %s")
 
 
 def test_valid_file_gets_derivatives_uploaded_and_recorded(env: Env) -> None:

@@ -5,8 +5,8 @@ Rows are seeded with SQL (the API flow is covered elsewhere) so each job can sta
 
 import os
 import uuid
-from datetime import UTC, datetime, timedelta
 from collections.abc import Callable, Iterator
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import psycopg
@@ -17,13 +17,18 @@ from psycopg.rows import dict_row
 import app.worker.ingest as job_module
 from app.errors import ApiError
 from app.storage import create_storage
-from app.worker.ingest import MAX_ATTEMPTS, ingest
+from app.worker.ingest import ingest
+from app.worker.limits import MAX_ATTEMPTS
 from tests.conftest import Account
 from tests.ingest_fixtures import image_bytes
 
 NOW = datetime.now(UTC)
 LONG_AGO = NOW - timedelta(hours=3)
 pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("local_stack_only")]
+
+
+def storage_down(*_: Any) -> None:
+    raise ApiError(502, "storage_unavailable", "down")
 
 
 @pytest.fixture
@@ -67,7 +72,9 @@ def seed(
     storage.close()
 
 
-def state(db: psycopg.Connection[dict[str, Any]], job_id: str, file_id: str) -> tuple[str, int, str]:
+def state(
+    db: psycopg.Connection[dict[str, Any]], job_id: str, file_id: str
+) -> tuple[str, int, str]:
     job = db.execute("select status, attempts from jobs where id = %s", (job_id,)).fetchone()
     file = db.execute("select status from project_files where id = %s", (file_id,)).fetchone()
     assert job and file
@@ -95,7 +102,9 @@ def test_a_transient_failure_requeues_and_the_next_delivery_claims_it_again(
     job, file_id = seed("queued")
     storage = job_module._dependencies()[1]
     monkeypatch.setattr(
-        storage, "upload", lambda *a: (_ for _ in ()).throw(ApiError(502, "storage_unavailable", "x"))
+        storage,
+        "upload",
+        lambda *a: (_ for _ in ()).throw(ApiError(502, "storage_unavailable", "x")),
     )
     monkeypatch.setattr(ingest, "retry", lambda **_: (_ for _ in ()).throw(Retry()))
 
@@ -137,10 +146,16 @@ def test_a_requeue_that_fails_does_not_leave_the_job_running(
     job, file_id = seed("queued")
     storage = job_module._dependencies()[1]
     monkeypatch.setattr(
-        storage, "upload", lambda *a: (_ for _ in ()).throw(ApiError(502, "storage_unavailable", "x"))
+        storage,
+        "upload",
+        lambda *a: (_ for _ in ()).throw(ApiError(502, "storage_unavailable", "x")),
     )
     # kills the connection that runs it: an OperationalError, like a database restart
-    monkeypatch.setattr(job_module, "REQUEUE", "select pg_terminate_backend(pg_backend_pid())")
+    monkeypatch.setattr(
+        job_module,
+        "REQUEUE",
+        "select pg_terminate_backend(pg_backend_pid()) where %s::text <> %s::text",
+    )
 
     ingest.apply(args=[job], throw=True)
 

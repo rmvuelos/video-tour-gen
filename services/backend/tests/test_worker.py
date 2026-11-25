@@ -14,4 +14,7 @@ def test_a_lost_worker_gives_the_message_back_to_the_broker() -> None:
     assert conf.task_acks_late and conf.task_reject_on_worker_lost and conf.task_ignore_result
     assert conf.worker_prefetch_multiplier == 1
     # the broker must not redeliver a message that is still being worked on
-    assert conf.broker_transport_options["visibility_timeout"] > HARD_TIME_LIMIT + BACKOFF_TOTAL_SECONDS
+    assert (
+        conf.broker_transport_options["visibility_timeout"]
+        > HARD_TIME_LIMIT + BACKOFF_TOTAL_SECONDS
+    )
