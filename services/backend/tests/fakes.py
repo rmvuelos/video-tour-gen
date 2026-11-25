@@ -64,6 +64,7 @@ class FakeStorage:
         self.deleted: list[tuple[str, list[str]]] = []
         self.prefixes: list[tuple[str, str]] = []
         self.objects: dict[tuple[str, str], bytes] = {}
+        self.download_caps: list[int] = []
         self.upload_errors: list[Exception] = []  # raised one per upload call, then it works
 
     def _note(self, call: str) -> None:
@@ -90,8 +91,10 @@ class FakeStorage:
     def delete_prefix(self, bucket: str, prefix: str) -> None:
         self.prefixes.append((bucket, prefix))
 
-    def download(self, bucket: str, path: str) -> bytes | None:
-        return self.objects.get((bucket, path))
+    def download(self, bucket: str, path: str, max_bytes: int) -> bytes | None:
+        self.download_caps.append(max_bytes)
+        data = self.objects.get((bucket, path))
+        return None if data is None else data[: max_bytes + 1]  # like the real, capped stream
 
     def upload(self, bucket: str, path: str, data: bytes, content_type: str) -> None:
         if self.upload_errors:

@@ -6,9 +6,12 @@ import pytest
 from celery.exceptions import Retry
 
 import app.worker.ingest as job_module
+from app.worker.ingest import ingest
 from app.errors import ApiError
+from app.files import input_limits
 from app.ingest import IngestError, IngestErrorCode
-from app.ingest.sandbox import Derived
+from app.ingest.sandbox import Derived, Limits
+from app.storage import TRANSFER_SECONDS
 from tests.fakes import FakePool, FakeStorage
 
 JOB, PROJECT, USER_ID = (str(uuid.uuid4()) for _ in range(3))
@@ -130,3 +133,37 @@ def test_unexpected_error_fails_the_job_and_is_not_retried(env: Env) -> None:
     assert result.failed()
     assert env.pool.ran("update jobs set status = %s")[-1][:2] == ("failed", "internal_error")
     assert Retry not in {type(result.result)}
+
+
+def test_a_path_outside_the_project_prefix_fails_the_job_without_touching_storage(
+    env: Env,
+) -> None:
+    env.pool.answers[1] = ("status = 'uploaded'", [{**ROW, "original_path": "other/p/f"}])
+
+    run()
+
+    assert env.storage.download_caps == [] and env.processed == []
+    assert env.pool.ran("update jobs set status = %s")[-1][:2] == ("failed", "internal_error")
+
+
+def test_only_502_and_503_are_retried(env: Env) -> None:
+    env.storage.upload_errors = [ApiError(500, "internal_error", "bug")]
+
+    run()
+
+    assert not env.pool.ran("set status = 'queued'")
+    assert env.pool.ran("update jobs set status = %s")[-1][:2] == ("failed", "internal_error")
+
+
+def test_the_download_is_capped_at_the_input_limit(env: Env) -> None:
+    run()
+
+    assert env.storage.download_caps == [input_limits().photos.max_bytes]
+
+
+def test_time_limits_cover_every_file_of_a_project() -> None:
+    files = 1 + input_limits().photos.max_count
+    per_file = 3 * TRANSFER_SECONDS + Limits().wall_seconds
+
+    assert ingest.soft_time_limit >= files * per_file
+    assert ingest.time_limit > ingest.soft_time_limit
