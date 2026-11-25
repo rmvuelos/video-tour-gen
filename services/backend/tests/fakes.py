@@ -18,6 +18,9 @@ class FakePool:
         self._last: list[dict[str, Any]] = []
         self.sequences: dict[str, list[list[dict[str, Any]]]] = {}
         self.open_connections = 0
+        self.errors: dict[str, Exception] = {}  # raised when the SQL contains the fragment
+        self.rowcounts: dict[str, int] = {}
+        self.rowcount = 1
 
     def on(self, fragment: str, rows: list[dict[str, Any]]) -> None:
         self.answers.append((fragment, rows))
@@ -39,6 +42,10 @@ class FakePool:
 
     def execute(self, sql: str, params: tuple[Any, ...] = ()) -> "FakePool":
         self.calls.append((sql, params))
+        for fragment, error in self.errors.items():
+            if fragment in sql:
+                raise error
+        self.rowcount = next((n for f, n in self.rowcounts.items() if f in sql), 1)
         queued = next((q for fragment, q in self.sequences.items() if fragment in sql), None)
         if queued is not None:
             self._last = queued.pop(0) if len(queued) > 1 else queued[0]
