@@ -31,7 +31,7 @@ function Where() {
   const { pathname, state } = useLocation()
   return (
     <p>
-      at {pathname} from {(state as { from?: { pathname: string } } | null)?.from?.pathname ?? '-'}
+      at {pathname} from {(state as { from?: string } | null)?.from ?? '-'}
     </p>
   )
 }
@@ -62,6 +62,40 @@ describe('SessionProvider and RequireAuth', () => {
     renderAt('/secret')
     await act(async () => mock.listener?.('INITIAL_SESSION', null))
     expect(screen.getByText('at /login from /secret')).toBeInTheDocument()
+  })
+
+  it('remembers the query and hash of the requested route too', async () => {
+    renderAt('/secret?tab=2#top')
+    await act(async () => mock.listener?.('INITIAL_SESSION', null))
+    expect(screen.getByText('at /login from /secret?tab=2#top')).toBeInTheDocument()
+  })
+
+  it('puts the loading status inside a main landmark', () => {
+    renderAt('/secret')
+    expect(screen.getByRole('main')).toContainElement(screen.getByRole('status'))
+  })
+
+  it('does not re-render consumers when a refresh keeps the same access token', async () => {
+    const onRender = vi.fn()
+    function Counter() {
+      useSession()
+      onRender()
+      return null
+    }
+    render(
+      <MemoryRouter>
+        <SessionProvider>
+          <Counter />
+        </SessionProvider>
+      </MemoryRouter>,
+    )
+    const signedIn = (token: string) => ({ access_token: token, user: { email: 'a@b.test' } })
+    await act(async () => mock.listener?.('INITIAL_SESSION', signedIn('t1') as never))
+    onRender.mockClear()
+    await act(async () => mock.listener?.('TOKEN_REFRESHED', signedIn('t1') as never))
+    expect(onRender).not.toHaveBeenCalled()
+    await act(async () => mock.listener?.('TOKEN_REFRESHED', signedIn('t2') as never))
+    expect(onRender).toHaveBeenCalledOnce()
   })
 
   it('renders the protected route with a session', async () => {
