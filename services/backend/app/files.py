@@ -1,10 +1,11 @@
+import logging
 from functools import lru_cache
 from pathlib import PurePath
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
 import psycopg
-from fastapi import APIRouter
+from fastapi import APIRouter, Response
 from psycopg.rows import DictRow
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
@@ -12,9 +13,10 @@ from app.auth import CurrentUserDep
 from app.db import PoolDep, connection
 from app.errors import ERROR_RESPONSES, ApiError, ErrorDetail
 from app.limits import FileRule, InputLimits, load_input_limits
-from app.storage import StorageDep
+from app.storage import DERIVED, ORIGINALS, ObjectStorage, StorageDep
 from app.validation import not_found, parse_id, printable
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/projects", tags=["files"], responses=ERROR_RESPONSES)
 
 MAX_BATCH = 11  # 1 plan + 10 photos
@@ -30,6 +32,10 @@ INSERT = (
     "insert into project_files (id, project_id, user_id, kind, original_filename, declared_mime, "
     "size_bytes, original_path) values (%s, %s, %s, %s, %s, %s, %s, %s)"
 )
+SELECT_FILE = (
+    "select id, original_path from project_files where id = %s and project_id = %s and user_id = %s"
+)
+DELETE = "delete from project_files where id = %s and project_id = %s and user_id = %s"
 # Rows whose signing failed: they never got a URL, so no object can exist.
 DELETE_PENDING = (
     "delete from project_files where id = any(%s) and project_id = %s and user_id = %s "
@@ -161,3 +167,41 @@ def register_files(
             )
         raise
     return UploadTargets(files=targets)
+
+
+def _owned_path(path: str, user_id: UUID, project_id: UUID) -> str:
+    """Storage deletes by path: refuse anything outside this user's and project's prefix."""
+    if not path.startswith(f"{user_id}/{project_id}/") or path.endswith("/"):
+        logger.error("refusing to delete a path outside the project prefix")
+        raise ApiError(500, "internal_error", "Something went wrong.")
+    return path
+
+
+def _remove_objects(storage: ObjectStorage, path: str) -> None:
+    # shortcut: best effort. An orphaned object is harmless (private bucket, unreachable path);
+    # a periodic sweep of objects without a row would reclaim the space.
+    try:
+        storage.delete(ORIGINALS, [path])
+        storage.delete_prefix(DERIVED, path)
+    except ApiError:
+        logger.warning("orphaned storage objects left behind: %s", path)
+
+
+@router.delete("/{project_id}/files/{file_id}", status_code=204)
+def delete_file(
+    project_id: str,
+    file_id: str,
+    user: CurrentUserDep,
+    pool: PoolDep,
+    storage: StorageDep,
+) -> Response:
+    project_uuid, file_uuid = parse_id(project_id), parse_id(file_id, "File")
+    with connection(pool) as conn:
+        lock_draft_project(conn, project_uuid, user.id)
+        row = conn.execute(SELECT_FILE, (file_uuid, project_uuid, user.id)).fetchone()
+        if row is None:
+            raise not_found("File")
+        path = _owned_path(row["original_path"], user.id, project_uuid)
+        conn.execute(DELETE, (file_uuid, project_uuid, user.id))
+    _remove_objects(storage, path)
+    return Response(status_code=204)

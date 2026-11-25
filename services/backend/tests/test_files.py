@@ -1,3 +1,4 @@
+import uuid
 from collections.abc import Iterator
 from typing import Any
 
@@ -135,6 +136,56 @@ def test_only_draft_projects_accept_files(client: TestClient, pool: FakePool) ->
     assert response.json()["error"]["code"] == "project_not_draft"
 
 
+def test_delete_removes_the_objects_and_the_row(
+    client: TestClient, pool: FakePool, storage: FakeStorage
+) -> None:
+    file_id = uuid.uuid4()
+    path = f"{USER.id}/{PROJECT_ID}/{file_id}"
+    pool.on("from project_files", [{"id": file_id, "original_path": path}])
+
+    response = client.delete(f"{URL}/{file_id}")
+
+    assert response.status_code == 204
+    assert storage.deleted == [("originals", [path])]
+    assert storage.prefixes == [("derived", path)]
+    assert pool.ran("delete from project_files") == [(file_id, PROJECT_ID, USER.id)]
+
+
+def test_delete_of_a_file_that_is_not_yours_is_404_and_touches_nothing(
+    client: TestClient, pool: FakePool, storage: FakeStorage
+) -> None:
+    response = client.delete(f"{URL}/{uuid.uuid4()}")
+
+    assert response.status_code == 404
+    assert storage.deleted == [] and pool.ran("delete from") == []
+    assert client.delete(f"{URL}/not-a-uuid").status_code == 404
+
+
+def test_delete_only_in_draft(client: TestClient, pool: FakePool, storage: FakeStorage) -> None:
+    pool.answers.clear()
+    pool.on("for update", [{"id": PROJECT_ID, "status": "ingesting"}])
+
+    response = client.delete(f"{URL}/{uuid.uuid4()}")
+
+    assert response.status_code == 409
+    assert storage.deleted == []
+
+
+def test_storage_is_never_called_while_the_project_lock_is_held(
+    client: TestClient, pool: FakePool, storage: FakeStorage
+) -> None:
+    file_id = uuid.uuid4()
+    pool.on(
+        "select id, original_path", [{"id": file_id, "original_path": f"{USER.id}/{PROJECT_ID}/x"}]
+    )
+
+    client.post(URL, json={"files": [photo()]})
+    client.delete(f"{URL}/{file_id}")
+
+    assert storage.signed and storage.deleted
+    assert storage.calls_in_transaction == []
+
+
 def test_a_signing_failure_removes_the_pending_rows_and_is_a_502(
     client: TestClient, pool: FakePool, storage: FakeStorage
 ) -> None:
@@ -146,6 +197,35 @@ def test_a_signing_failure_removes_the_pending_rows_and_is_a_502(
     assert len(pool.ran("delete from project_files where id = any")) == 1
 
 
+def test_a_storage_failure_after_the_row_is_gone_still_answers_204(
+    client: TestClient, pool: FakePool, storage: FakeStorage
+) -> None:
+    file_id = uuid.uuid4()
+    pool.on("from project_files", [{"id": file_id, "original_path": f"{USER.id}/{PROJECT_ID}/x"}])
+    storage.delete_error = ApiError(502, "storage_unavailable", "down")
+
+    response = client.delete(f"{URL}/{file_id}")
+
+    assert response.status_code == 204
+    assert len(pool.ran("delete from project_files where id = %s")) == 1
+
+
+@pytest.mark.parametrize(
+    "path", ["", "other/user/file", f"{USER.id}/{uuid.uuid4()}/f", f"{USER.id}/{PROJECT_ID}"]
+)
+def test_a_stored_path_outside_the_project_prefix_is_never_deleted(
+    client: TestClient, pool: FakePool, storage: FakeStorage, path: str
+) -> None:
+    file_id = uuid.uuid4()
+    pool.on("from project_files", [{"id": file_id, "original_path": path}])
+
+    response = client.delete(f"{URL}/{file_id}")
+
+    assert response.status_code == 500
+    assert storage.deleted == [] and storage.prefixes == []
+    assert pool.ran("delete from project_files where id = %s") == []
+
+
 @pytest.mark.parametrize(
     "name",
     ["a/b.jpg", "a\\b.jpg", "a\u0000.jpg", "a\u200b.jpg", "\u202egpj.exe"],
@@ -154,12 +234,3 @@ def test_filenames_with_separators_or_invisible_characters_are_422(
     client: TestClient, name: str
 ) -> None:
     assert client.post(URL, json={"files": [photo(filename=name)]}).status_code == 422
-
-
-def test_storage_is_never_called_while_the_project_lock_is_held(
-    client: TestClient, storage: FakeStorage
-) -> None:
-    client.post(URL, json={"files": [photo()]})
-
-    assert storage.signed
-    assert storage.calls_in_transaction == []
