@@ -37,6 +37,18 @@ describe('Alert', () => {
     expect(onClick).toHaveBeenCalledOnce()
   })
 
+  it('lets the action carry a more specific accessible name and a 24px target', () => {
+    render(
+      <Alert
+        tone="error"
+        action={{ label: 'Retry', ariaLabel: 'Retry hall.jpg', onClick: () => {} }}
+      >
+        Failed
+      </Alert>,
+    )
+    expect(screen.getByRole('button', { name: 'Retry hall.jpg' })).toHaveClass('min-h-6')
+  })
+
   it('has no button without an action', () => {
     render(<Alert tone="info">Tip</Alert>)
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
@@ -64,7 +76,15 @@ describe('ProgressBar', () => {
     render(<ProgressBar label="Preparing" />)
     const bar = screen.getByRole('progressbar', { name: 'Preparing' })
     expect(bar).not.toHaveAttribute('aria-valuenow')
-    expect(bar.firstElementChild).toHaveClass('motion-reduce:animate-none')
+    const fill = bar.firstElementChild
+    expect(fill).toHaveClass('motion-reduce:animate-none', 'motion-reduce:transition-none')
+    // Without motion it must not look like a partial value: full width, dimmed.
+    expect(fill).toHaveClass('motion-reduce:w-full', 'motion-reduce:opacity-(--opacity-disabled)')
+  })
+
+  it('requires a name', () => {
+    // @ts-expect-error a progress bar needs label or labelledBy
+    render(<ProgressBar value={1} />)
   })
 
   it('can be named by another element', () => {

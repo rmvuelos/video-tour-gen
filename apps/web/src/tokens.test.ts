@@ -101,3 +101,9 @@ describe('color tokens', () => {
     expect(contrast(fg, bg)).toBeGreaterThanOrEqual(3)
   })
 })
+
+describe('reduced motion', () => {
+  it('runs animations once, not forever', () => {
+    expect(css).toMatch(/animation-iteration-count:\s*1\s*!important/)
+  })
+})
