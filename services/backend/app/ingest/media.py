@@ -7,11 +7,12 @@ exception: it propagates so the worker can decide (retry elsewhere, fail the job
 import functools
 import io
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Literal
 
 import pypdfium2 as pdfium
 import pypdfium2.raw as pdfium_raw
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from app.ingest.errors import IngestError, IngestErrorCode
 from app.limits import load_input_limits
@@ -28,6 +29,18 @@ _PIL_FORMATS: dict[str, FileType] = {"JPEG": "jpeg", "MPO": "jpeg", "PNG": "png"
 # 64 MP (8000x8000): above any phone camera, ~190 MB decoded as RGB; stops decompression bombs.
 # Checked on the header before decoding; Pillow's own bomb error/warning is only a safety net.
 MAX_IMAGE_PIXELS = 64_000_000
+
+PHOTO_MAX_SIDE = 2048  # P-8: enough for the vision models, small to store and send
+THUMB_SIDE = 512
+JPEG_QUALITY = 85  # visually lossless for photos; derivatives are re-encoded once from the original
+
+
+@dataclass(frozen=True, slots=True)
+class NormalizedPhoto:
+    main_jpeg: bytes
+    thumb_jpeg: bytes
+    width: int
+    height: int
 
 
 def _stable_errors[**P, R](func: Callable[P, R]) -> Callable[P, R]:
@@ -96,3 +109,44 @@ def detect_type(data: bytes, kind: FileKind | None = None) -> FileType:
     if kind is not None and found not in ALLOWED_TYPES[kind]:
         raise IngestError(IngestErrorCode.KIND_MISMATCH)
     return found
+
+
+def _encode(image: Image.Image, fmt: Literal["JPEG", "PNG"]) -> bytes:
+    # No exif=/icc_profile=: nothing from the original metadata (GPS included) is written.
+    # shortcut: the ICC profile is dropped, so wide-gamut colours shift; convert to sRGB if needed.
+    out = io.BytesIO()
+    if fmt == "JPEG":
+        image.save(out, "JPEG", quality=JPEG_QUALITY)
+    else:
+        image.save(out, "PNG")
+    return out.getvalue()
+
+
+def _thumbnail(image: Image.Image) -> bytes:
+    thumb = image.copy()
+    thumb.thumbnail((THUMB_SIDE, THUMB_SIDE), Image.Resampling.LANCZOS)
+    return _encode(thumb, "JPEG")
+
+
+def _derive(image: Image.Image, max_side: int) -> Image.Image:
+    """Shrink first (JPEGs decode at reduced size), then orient and flatten to RGB.
+
+    Never enlarges. Transparency is composed onto white only after shrinking, and only if the
+    image has any: going through RGBA at full size would cost 4 bytes per pixel.
+    """
+    has_alpha = "A" in image.getbands() or "transparency" in image.info
+    if image.mode == "P" or (has_alpha and image.mode != "RGBA"):
+        image = image.convert("RGBA" if has_alpha else "RGB")  # palettes do not resample well
+    image.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
+    image = ImageOps.exif_transpose(image)
+    if not has_alpha:
+        return image.convert("RGB")
+    white = Image.new("RGBA", image.size, (255, 255, 255, 255))  # not black: it hides plan lines
+    return Image.alpha_composite(white, image).convert("RGB")
+
+
+@_stable_errors
+def normalize_photo(data: bytes) -> NormalizedPhoto:
+    with _open_image(data) as image:
+        photo = _derive(image, PHOTO_MAX_SIDE)
+    return NormalizedPhoto(_encode(photo, "JPEG"), _thumbnail(photo), photo.width, photo.height)
