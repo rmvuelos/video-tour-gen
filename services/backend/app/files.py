@@ -13,6 +13,7 @@ from app.auth import CurrentUserDep
 from app.db import PoolDep, connection
 from app.errors import ERROR_RESPONSES, ApiError, ErrorDetail
 from app.limits import FileRule, InputLimits, load_input_limits
+from app.ratelimit import FilesLimit
 from app.storage import DERIVED, ORIGINALS, ObjectStorage, StorageDep
 from app.validation import not_found, parse_id, printable
 
@@ -136,6 +137,7 @@ def register_files(
     user: CurrentUserDep,
     pool: PoolDep,
     storage: StorageDep,
+    _limit: FilesLimit,
 ) -> UploadTargets:
     project_uuid = parse_id(project_id)
     planned = [(uuid4(), item) for item in body.files]
@@ -194,6 +196,7 @@ def delete_file(
     user: CurrentUserDep,
     pool: PoolDep,
     storage: StorageDep,
+    _limit: FilesLimit,
 ) -> Response:
     project_uuid, file_uuid = parse_id(project_id), parse_id(file_id, "File")
     with connection(pool) as conn:
