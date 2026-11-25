@@ -10,6 +10,7 @@ import { Field } from '../components/ui/Field'
 import { Icon } from '../components/ui/Icon'
 import { Input } from '../components/ui/Input'
 import { SaveStatus } from '../components/ui/SaveStatus'
+import { Sidebar } from '../components/ui/Sidebar'
 import { Stepper } from '../components/ui/Stepper'
 import { Textarea } from '../components/ui/Textarea'
 
@@ -164,6 +165,18 @@ export default function UiGallery() {
             { label: 'Blueprint / sketch', done: true },
             { label: 'Photo references', done: false },
           ]}
+        />
+      </Section>
+      <Section title="Sidebar">
+        <p className="text-caption text-fg-muted">
+          Hover or Tab to a disabled item to see the Coming soon tooltip.
+        </p>
+        {/* 1080 px = the Figma frame height. */}
+        <Sidebar
+          current="upload"
+          hrefs={{ upload: '#upload', projects: '#projects' }}
+          user={{ name: 'Adri M.', initials: 'AM' }}
+          className="h-270 shadow-card"
         />
       </Section>
       <Section title="Field, input, textarea">
