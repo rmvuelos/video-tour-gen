@@ -10,12 +10,14 @@ from app.files import router as files_router
 from app.projects import router as projects_router
 from app.startup import validate_startup
 from app.storage import create_storage
+from app.submit import configure_publisher
 from app.submit import router as submit_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     validate_startup()  # fail fast when the process starts with a bad setup
+    configure_publisher()
     app.state.pool = create_pool()
     app.state.storage = create_storage()
     try:
