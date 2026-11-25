@@ -22,20 +22,34 @@ from app.ingest.media import FileKind
 from app.ingest.sandbox import process_file
 from app.storage import DERIVED, ORIGINALS, ObjectStorage, create_storage
 from app.worker import celery_app
-from app.worker.limits import HARD_TIME_LIMIT, SOFT_TIME_LIMIT
+from app.worker.limits import (
+    BACKOFF_SECONDS,
+    HARD_TIME_LIMIT,
+    MAX_ATTEMPTS,
+    MAX_RETRIES,
+    SOFT_TIME_LIMIT,
+    STALE_RUNNING_SECONDS,
+)
 
 logger = logging.getLogger(__name__)
 
-MAX_RETRIES = 3
-BACKOFF_SECONDS = 5  # 5, 10, 20
 TRANSIENT = (ApiError, psycopg.OperationalError)  # candidates: see _is_transient
 RETRYABLE_STATUS = (502, 503)  # Storage or DB is down; any other ApiError is a bug
 
 # Every query is filtered by user_id: the DB role bypasses RLS (P-5).
+# `running` + an old claim = the worker died: the redelivered message may take the job over.
+RECLAIMABLE = (
+    "(status = 'queued' or (status = 'running' and claimed_at < "
+    f"now() - make_interval(secs => {STALE_RUNNING_SECONDS})))"
+)
 CLAIM = (
-    "update jobs set status = 'running', started_at = coalesce(started_at, now()), "
-    "attempts = attempts + 1 where id = %s and status = 'queued' "
-    "returning id, project_id, user_id"
+    "update jobs set status = 'running', claimed_at = now(), "
+    "started_at = coalesce(started_at, now()), attempts = attempts + 1 "
+    f"where id = %s and attempts < %s and {RECLAIMABLE} returning id, project_id, user_id"
+)
+EXHAUST = (
+    "update jobs set status = 'failed', error_code = 'worker_lost', finished_at = now() "
+    f"where id = %s and attempts >= %s and {RECLAIMABLE}"
 )
 FILES = (
     "select id, kind, page_index, original_path from project_files "
@@ -115,8 +129,8 @@ def _process_files(pool: Pool, storage: ObjectStorage, job: dict[str, Any]) -> N
 
 def _finish(pool: Pool, job: dict[str, Any], status: str, error: str | None = None) -> None:
     with connection(pool) as conn:
-        conn.execute(FINISH, (status, error, job["id"], job["user_id"]))
-        if status == "done":
+        finished = conn.execute(FINISH, (status, error, job["id"], job["user_id"]))
+        if finished.rowcount and status == "done":  # 0: the job was taken over; leave it be
             args = (job["project_id"], job["user_id"])
             unfinished = conn.execute(UNFINISHED, args).fetchone()
             project = "needs_fix" if unfinished and unfinished["bad"] else "ready"
@@ -132,6 +146,19 @@ def _give_up(pool: Pool, job: dict[str, Any] | None, error: str) -> None:
         logger.error("could not mark job %s as failed", job["id"])
 
 
+def _requeue(pool: Pool, job: dict[str, Any]) -> bool:
+    """Back to `queued` so the retry can claim it again. If even that fails, give up (or, when the
+    database is gone, leave it `running`: the stale-claim recovery picks it up)."""
+    try:
+        with connection(pool) as conn:
+            conn.execute(REQUEUE, (job["id"], job["user_id"]))
+    except TRANSIENT:
+        logger.error("could not requeue job %s", job["id"])
+        _give_up(pool, job, "storage_unavailable")
+        return False
+    return True
+
+
 @celery_app.task(
     name="ingest", bind=True, max_retries=MAX_RETRIES,
     soft_time_limit=SOFT_TIME_LIMIT, time_limit=HARD_TIME_LIMIT,
@@ -141,7 +168,9 @@ def ingest(self: Task, job_id: str) -> None:
     job: dict[str, Any] | None = None
     try:
         with connection(pool) as conn:
-            job = conn.execute(CLAIM, (job_id,)).fetchone()
+            job = conn.execute(CLAIM, (job_id, MAX_ATTEMPTS)).fetchone()
+            if job is None:  # a worker that keeps dying on this job: stop the loop
+                conn.execute(EXHAUST, (job_id, MAX_ATTEMPTS))
         if job is None:  # claimed, finished or unknown: a duplicate message does nothing
             return
         _process_files(pool, storage, job)
@@ -153,9 +182,8 @@ def ingest(self: Task, job_id: str) -> None:
         if self.request.retries >= MAX_RETRIES:
             _give_up(pool, job, "storage_unavailable")
             return
-        if job:
-            with connection(pool) as conn:  # so the retry can claim it again
-                conn.execute(REQUEUE, (job["id"], job["user_id"]))
+        if job and not _requeue(pool, job):
+            return
         raise self.retry(exc=exc, countdown=BACKOFF_SECONDS * 2**self.request.retries) from exc
     except SoftTimeLimitExceeded:
         _give_up(pool, job, "timeout")

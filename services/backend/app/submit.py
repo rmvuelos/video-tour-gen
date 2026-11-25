@@ -18,6 +18,7 @@ from app.settings import Settings, get_settings
 from app.storage import ObjectStorage, StorageDep
 from app.validation import not_found, parse_id, printable
 from app.worker import celery_app, configure_celery
+from app.worker.limits import STALE_RUNNING_SECONDS
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/projects", tags=["submit"], responses=ERROR_RESPONSES)
@@ -30,6 +31,8 @@ BROKER_TIMEOUT_SECONDS = 3
 ACTIVE_JOB = (
     "select id, project_id, status, created_at, "
     f"(status = 'queued' and created_at < now() - interval '{STALE_QUEUED_SECONDS} seconds') "
+    "or (status = 'running' and claimed_at < "
+    f"now() - make_interval(secs => {STALE_RUNNING_SECONDS})) "
     "as stale from jobs where project_id = %s and user_id = %s "
     "and type = 'ingest' and status in ('queued', 'running') limit 1"
 )
@@ -96,6 +99,7 @@ def configure_publisher(settings: Settings | None = None) -> None:
     configure_celery(settings or get_settings())
     celery_app.conf.broker_connection_timeout = BROKER_TIMEOUT_SECONDS
     celery_app.conf.broker_transport_options = {
+        **celery_app.conf.broker_transport_options,  # keeps the worker's visibility_timeout
         "socket_timeout": BROKER_TIMEOUT_SECONDS,
         "socket_connect_timeout": BROKER_TIMEOUT_SECONDS,
     }
@@ -159,7 +163,7 @@ def _lock_and_find_job(
         return Outcome(
             Job.model_validate(active),
             created=False,
-            send=bool(active.get("stale")) and active["status"] == "queued",
+            send=bool(active.get("stale")),
         )
     if project["status"] != "draft":
         raise ApiError(409, "project_not_draft", "This project was already sent.")
