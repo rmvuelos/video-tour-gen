@@ -10,6 +10,7 @@ from app.files import router as files_router
 from app.projects import router as projects_router
 from app.startup import validate_startup
 from app.storage import create_storage
+from app.submit import router as submit_router
 
 
 @asynccontextmanager
@@ -28,6 +29,7 @@ app = FastAPI(title="video-tour-gen api", lifespan=lifespan)
 install_error_handlers(app)
 app.include_router(projects_router)
 app.include_router(files_router)
+app.include_router(submit_router)
 
 
 @app.get("/health")

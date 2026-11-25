@@ -176,10 +176,6 @@ def test_a_project_that_is_neither_draft_nor_active_is_409(client: TestClient, e
     assert client.post(URL, json={}).status_code == 409
 
 
-
-
-
-
 def test_storage_is_checked_without_holding_a_database_connection(
     client: TestClient, env: Env
 ) -> None:
@@ -190,20 +186,12 @@ def test_storage_is_checked_without_holding_a_database_connection(
     assert env.storage.calls_in_transaction == []
 
 
-
-
-
-
 def test_two_plans_get_their_own_message(client: TestClient, env: Env) -> None:
     env.files(file_row("plan"), file_row("plan"), *[file_row("photo") for _ in range(3)])
 
     response = client.post(URL, json={})
 
     assert codes(response) == ["too_many_plans"]
-
-
-
-
 
 
 def test_details_that_were_not_sent_do_not_erase_the_saved_ones(
@@ -215,13 +203,3 @@ def test_details_that_were_not_sent_do_not_erase_the_saved_ones(
 
     sql = next(sql for sql, _ in env.pool.calls if "set area_m2" in sql)
     assert "coalesce(%s, area_m2)" in sql and "coalesce(%s, description)" in sql
-
-
-
-
-
-
-
-
-
-
