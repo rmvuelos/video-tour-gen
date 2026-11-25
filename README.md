@@ -41,7 +41,7 @@ En Windows, Playwright usa el Edge del sistema; en otros sistemas ejecuta antes 
 
 ## Verificación
 
-`pnpm verify:ci` reproduce en local, en orden y parando en el primer fallo, los jobs de `.github/workflows/ci.yml` con el mismo entorno (`CI=1`, `IGNORE_LOCAL_ENV=1`, sin `.env.local` ni `VITE_*`): `web-quality` (eslint, tsc, prettier, knip), `web-test` (vitest con cobertura), `web-build`, `py-quality` y `py-test` (en la imagen Docker del backend), `e2e` (smoke con Playwright), `security` (gitleaks sobre todo el historial en Docker, `pnpm audit`, `pip-audit`) y `commits` (commitlint y sin atribución a la IA, contra `origin/main`). Termina con un resumen ✔/✖ y la duración de cada job; con las imágenes ya descargadas tarda cerca de un minuto (más la primera vez). Ejecútalo antes de abrir un PR.
+`pnpm verify:ci` reproduce en local, en orden y parando en el primer fallo, los jobs de `.github/workflows/ci.yml` con el mismo entorno (`CI=1`, `IGNORE_LOCAL_ENV=1`, sin `.env.local` ni `VITE_*`): `web-quality` (eslint, tsc, prettier, knip), `web-test` (vitest con cobertura), `web-build`, `py-quality` y `py-test` (en la imagen Docker del backend), `e2e` (smoke con Playwright), `db` (Supabase local: `db reset`, tests pgTAP con `supabase test db` y los tests `integration` del backend, con tokens reales), `security` (gitleaks sobre todo el historial en Docker, `pnpm audit`, `pip-audit`) y `commits` (commitlint y sin atribución a la IA, contra `origin/main`). Termina con un resumen ✔/✖ y la duración de cada job; con las imágenes ya descargadas tarda cerca de un minuto (más la primera vez). Ejecútalo antes de abrir un PR.
 
 Detalles:
 
@@ -56,7 +56,7 @@ Detalles:
 La configura el owner del repositorio (Settings, Branches, regla para `main`), según CONTRIBUTING §5:
 
 - Require a pull request before merging, con una aprobación y "Dismiss stale approvals" al llegar commits nuevos.
-- Require status checks to pass y "Require branches to be up to date": `web-quality`, `web-test`, `web-build`, `py-quality`, `py-test`, `e2e`, `security` y `commits`.
+- Require status checks to pass y "Require branches to be up to date": `web-quality`, `web-test`, `web-build`, `py-quality`, `py-test`, `e2e`, `db`, `security` y `commits`.
 - Require linear history y solo "Rebase and merge" permitido.
 - Sin force-push ni borrado de `main`.
 

@@ -155,6 +155,7 @@
   --spacing-tile: 90px;
   --spacing-dropzone: 341px;
   --spacing-icon: 24px;
+  --spacing-icon-nav: 21px;
   --spacing-icon-sm: 20px;
   --spacing-step: 30px;
   --spacing-step-gap: 13px;
@@ -169,6 +170,7 @@
   --spacing-avatar: 3rem;
   --spacing-avatar-sm: 2.75rem;
   --spacing-brand-mark: 47px;
+  --spacing-plan-card: 110px;
 }
 
 @keyframes indeterminate {

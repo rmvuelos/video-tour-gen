@@ -1,6 +1,11 @@
 import type { ComponentProps } from 'react'
 
-const SIZES = { md: 'size-icon', sm: 'size-icon-sm', lg: 'size-icon-lg' }
+const SIZES = {
+  md: 'size-icon',
+  sm: 'size-icon-sm',
+  nav: 'size-icon-nav',
+  lg: 'size-icon-lg',
+}
 
 type Props = Omit<ComponentProps<'span'>, 'children'> & { src: string; size?: keyof typeof SIZES }
 
