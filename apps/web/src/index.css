@@ -135,6 +135,7 @@
   --dash-length: 10px;
   --dash-gap: 12px;
   --dash-inset: 10px;
+  --dash-corner: 5px;
   --focus-width: 2px;
   --focus-offset: 2px;
 
@@ -235,10 +236,14 @@
   inset: var(--dash-inset);
   pointer-events: none;
   background:
-    var(--dash-h) left top / 100% var(--dash-width) no-repeat,
-    var(--dash-h) left bottom / 100% var(--dash-width) no-repeat,
-    var(--dash-v) left top / var(--dash-width) 100% no-repeat,
-    var(--dash-v) right top / var(--dash-width) 100% no-repeat;
+    var(--dash-h) left var(--dash-corner) top / calc(100% - 2 * var(--dash-corner))
+      var(--dash-width) no-repeat,
+    var(--dash-h) left var(--dash-corner) bottom / calc(100% - 2 * var(--dash-corner))
+      var(--dash-width) no-repeat,
+    var(--dash-v) left 0 top var(--dash-corner) / var(--dash-width)
+      calc(100% - 2 * var(--dash-corner)) no-repeat,
+    var(--dash-v) right 0 top var(--dash-corner) / var(--dash-width)
+      calc(100% - 2 * var(--dash-corner)) no-repeat;
 }
 .dash-border[data-dash='active'],
 .dash-border[data-dash='reject'] {
