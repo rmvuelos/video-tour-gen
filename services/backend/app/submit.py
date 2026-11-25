@@ -7,19 +7,20 @@ from uuid import UUID
 import psycopg
 from fastapi import APIRouter
 from psycopg.rows import DictRow
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
 from app.auth import CurrentUserDep
 from app.db import Pool, PoolDep, connection
 from app.errors import ERROR_RESPONSES, ApiError, ErrorDetail
 from app.files import LOCK, input_limits
 from app.storage import ObjectStorage, StorageDep
-from app.validation import not_found, parse_id
+from app.validation import not_found, parse_id, printable
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/projects", tags=["submit"], responses=ERROR_RESPONSES)
 
 DESCRIPTION_MAX_CHARS = 2000  # mirrors shared/input-limits.json and the column check
+AREA_MAX_M2 = 100_000  # a sanity cap, far above any home
 # Every query is filtered by user_id: the DB role bypasses RLS (P-5).
 ACTIVE_JOB = (
     "select id, project_id, status, created_at from jobs where project_id = %s and user_id = %s "
@@ -48,12 +49,18 @@ INSERT_JOB = (
 )
 
 
+def _note(value: str) -> str:
+    return printable(value, allow="\n\r\t")
+
+
 class SubmitIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     plan_page_index: Annotated[int | None, Field(ge=0)] = None  # the ingest checks the real count
-    area_m2: Annotated[float | None, Field(gt=0)] = None
-    description: Annotated[str | None, Field(max_length=DESCRIPTION_MAX_CHARS)] = None
+    area_m2: Annotated[float | None, Field(gt=0, le=AREA_MAX_M2, allow_inf_nan=False)] = None
+    description: (
+        Annotated[str, Field(max_length=DESCRIPTION_MAX_CHARS), AfterValidator(_note)] | None
+    ) = None
 
 
 class Job(BaseModel):
@@ -125,17 +132,24 @@ def _lock_and_find_job(
     return None
 
 
+def _fingerprint(rows: list[dict[str, Any]]) -> frozenset[tuple[Any, ...]]:
+    return frozenset((r["id"], r["status"], r["size_bytes"]) for r in rows)
+
+
 def _create_job(
     pool: Pool,
     project_id: UUID,
     user_id: UUID,
     body: SubmitIn,
+    seen: list[dict[str, Any]],
 ) -> Outcome:
     with connection(pool) as conn:
         found = _lock_and_find_job(conn, project_id, user_id)  # a concurrent submit may have won
         if found:
             return found
         rows = conn.execute(FILES, (project_id, user_id)).fetchall()
+        if _fingerprint(rows) != _fingerprint(seen):  # storage was checked without the lock
+            raise ApiError(409, "files_changed", "The files changed while sending. Try again.")
         for row in rows:
             conn.execute(MARK, (row["id"], project_id, user_id))
         if body.plan_page_index is not None:
@@ -163,5 +177,5 @@ def submit(
             raise ApiError(
                 422, "invalid_files", "The project is not ready to send.", details=errors
             )
-        outcome = _create_job(pool, project_uuid, user.id, body)
+        outcome = _create_job(pool, project_uuid, user.id, body, rows)
     return outcome.job

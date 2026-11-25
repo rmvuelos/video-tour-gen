@@ -6,8 +6,9 @@ from app.errors import ApiError
 FORBIDDEN_CATEGORIES = {"Cc", "Cf", "Cs"}  # control, format (zero-width, bidi), surrogates
 
 
-def printable(value: str) -> str:
-    if any(unicodedata.category(c) in FORBIDDEN_CATEGORIES for c in value):
+def printable(value: str, allow: str = "") -> str:
+    """Reject control, invisible and bidi characters, except those listed in `allow`."""
+    if any(unicodedata.category(c) in FORBIDDEN_CATEGORIES and c not in allow for c in value):
         raise ValueError("must not contain control or invisible characters")
     return value
 
