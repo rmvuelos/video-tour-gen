@@ -4,7 +4,7 @@ import json
 import logging
 import time
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from typing import Any
 
 import jwt
@@ -21,7 +21,11 @@ from app.api import app
 ISSUER = "http://supabase.test/auth/v1"
 USER_ID = str(uuid.uuid4())
 KID = "test-key"
-NOW = int(time.time())
+
+
+def _from_now(seconds: int) -> Callable[[int], int]:
+    """Claim value resolved when the token is built, so slow test runs cannot age it."""
+    return lambda now: now + seconds
 
 
 def _jwks(key: ec.EllipticCurvePrivateKey, kid: str = KID) -> dict[str, Any]:
@@ -62,6 +66,7 @@ def _token(
         "exp": now + 300,
     }
     claims = {k: v for k, v in {**claims, **overrides}.items() if v is not None}
+    claims = {k: v(now) if callable(v) else v for k, v in claims.items()}
     return jwt.encode(claims, key, algorithm=alg, headers={"kid": kid, **(headers or {})})
 
 
@@ -99,7 +104,7 @@ def _assert_unauthorized(response: Any) -> None:
     [
         pytest.param({}, "ana@example.test", id="valid"),
         pytest.param({"email": None}, None, id="email-optional"),
-        pytest.param({"exp": NOW - 5}, "ana@example.test", id="within-leeway"),
+        pytest.param({"exp": _from_now(-5)}, "ana@example.test", id="within-leeway"),
         pytest.param({"is_anonymous": False}, "ana@example.test", id="not-anonymous"),
     ],
 )
@@ -135,8 +140,8 @@ REJECTED = [
     pytest.param(lambda key: {"Authorization": "Bearer "}, id="empty-bearer"),
     pytest.param(lambda key: {"Authorization": f"Bearer {_token(key)} a"}, id="extra-part"),
     pytest.param(lambda key: _bearer("not.a.jwt"), id="garbage-token"),
-    pytest.param(_claims(exp=NOW - 3600), id="expired"),
-    pytest.param(_claims(exp=NOW - 30), id="past-leeway"),
+    pytest.param(_claims(exp=_from_now(-3600)), id="expired"),
+    pytest.param(_claims(exp=_from_now(-30)), id="past-leeway"),
     pytest.param(_claims(aud="anon"), id="aud"),
     pytest.param(_claims(iss="http://evil.test/auth/v1"), id="iss"),
     pytest.param(_claims(sub="not-a-uuid"), id="sub-not-uuid"),
@@ -149,8 +154,8 @@ REJECTED = [
     pytest.param(_claims(role=None), id="no-role"),
     pytest.param(_claims(iat=None), id="no-iat"),
     pytest.param(_claims(is_anonymous=True), id="is-anonymous"),
-    pytest.param(_claims(nbf=NOW + 3600), id="nbf-future"),
-    pytest.param(_claims(iat=NOW + 3600), id="iat-future"),
+    pytest.param(_claims(nbf=_from_now(+3600)), id="nbf-future"),
+    pytest.param(_claims(iat=_from_now(+3600)), id="iat-future"),
     pytest.param(_claims(kid="other-kid"), id="unknown-kid"),
     pytest.param(_other_key(ec.SECP256R1()), id="other-key-known-kid"),
     pytest.param(_other_key(ec.SECP384R1(), alg="ES384"), id="es384-known-kid"),
