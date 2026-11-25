@@ -60,7 +60,59 @@ describe('apiFetch', () => {
   it('signs out on 401 and still throws', async () => {
     fetchMock.mockResolvedValue(json(401, { error: { code: 'unauthorized', message: 'No' } }))
     await expect(apiFetch('/me')).rejects.toMatchObject({ status: 401, code: 'unauthorized' })
+    expect(auth.signOut).toHaveBeenCalledExactlyOnceWith({ scope: 'local' })
+  })
+
+  it('closes the session once when several requests get a 401 together', async () => {
+    fetchMock.mockImplementation(async () =>
+      json(401, { error: { code: 'unauthorized', message: 'No' } }),
+    )
+    auth.signOut.mockImplementation(() => new Promise((resolve) => setTimeout(resolve, 10)))
+    await Promise.allSettled([apiFetch('/a'), apiFetch('/b'), apiFetch('/c')])
     expect(auth.signOut).toHaveBeenCalledOnce()
+  })
+
+  it('ignores a late 401 for a token that is no longer the current one', async () => {
+    auth.getSession
+      .mockResolvedValueOnce({ data: { session: { access_token: 'old' } } })
+      .mockResolvedValue({ data: { session: { access_token: 'new' } } })
+    fetchMock.mockResolvedValue(json(401, { error: { code: 'unauthorized', message: 'No' } }))
+    await expect(apiFetch('/me')).rejects.toMatchObject({ status: 401 })
+    expect(auth.signOut).not.toHaveBeenCalled()
+  })
+
+  it('still throws the 401 error when closing the session fails', async () => {
+    auth.signOut.mockRejectedValue(new Error('storage broke'))
+    fetchMock.mockResolvedValue(json(401, { error: { code: 'unauthorized', message: 'No' } }))
+    await expect(apiFetch('/me')).rejects.toMatchObject({ status: 401, code: 'unauthorized' })
+  })
+
+  it.each(['me', '//evil.test/x', '/\\evil.test', 'https://evil.test/x'])(
+    'refuses the path %s before sending anything',
+    async (path) => {
+      await expect(apiFetch(path)).rejects.toThrow(TypeError)
+      expect(fetchMock).not.toHaveBeenCalled()
+      expect(auth.getSession).not.toHaveBeenCalled()
+    },
+  )
+
+  it('propagates an abort as it is, not as a network error', async () => {
+    fetchMock.mockRejectedValue(new DOMException('Aborted', 'AbortError'))
+    await expect(apiFetch('/x', { signal: new AbortController().signal })).rejects.toMatchObject({
+      name: 'AbortError',
+    })
+  })
+
+  it('does not even read the session when the signal is already aborted', async () => {
+    await expect(apiFetch('/x', { signal: AbortSignal.abort() })).rejects.toMatchObject({
+      name: 'AbortError',
+    })
+    expect(auth.getSession).not.toHaveBeenCalled()
+  })
+
+  it('turns invalid JSON in a 2xx answer into a typed error', async () => {
+    fetchMock.mockResolvedValue(new Response('<html>', { status: 200 }))
+    await expect(apiFetch('/x')).rejects.toMatchObject({ status: 200, code: 'invalid_response' })
   })
 
   it('keeps the session on 503 (auth unavailable is not a bad token)', async () => {
