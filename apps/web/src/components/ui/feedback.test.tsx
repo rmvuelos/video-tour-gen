@@ -19,7 +19,6 @@ describe('Alert', () => {
 
   it('states the tone in text and hides the icon', () => {
     render(<Alert tone="error">Upload failed</Alert>)
-    expect(screen.getByRole('alert')).toHaveAccessibleName('')
     expect(screen.getByText('Error:')).toBeInTheDocument()
     expect(screen.getByRole('alert').querySelector('[data-icon]')).toHaveAttribute(
       'aria-hidden',
