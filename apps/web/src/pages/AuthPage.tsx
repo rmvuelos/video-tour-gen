@@ -8,10 +8,16 @@ import { Card } from '../components/ui/Card'
 import { Eyebrow } from '../components/ui/Eyebrow'
 import { Field } from '../components/ui/Field'
 import { Input } from '../components/ui/Input'
+import { Loading } from '../components/Loading'
+import { safeReturnPath } from '../lib/return-path'
 import { getSupabase } from '../lib/supabase'
 
 // Matches supabase/config.toml `minimum_password_length`.
 const MIN_PASSWORD = 6
+
+const RATE_LIMITED = 'Too many attempts. Wait a minute and try again.'
+const isRateLimited = (code: string | undefined, status: number | undefined) =>
+  status === 429 || Boolean(code?.endsWith('rate_limit'))
 
 const MODES = {
   login: {
@@ -22,10 +28,11 @@ const MODES = {
     switchTo: '/signup',
     autoComplete: 'current-password',
     // One message for every credential failure: it must not reveal whether the email exists.
-    failure: (code: string | undefined) =>
-      code === 'invalid_credentials'
-        ? 'Incorrect email or password.'
-        : 'Something went wrong. Try again in a moment.',
+    failure: (code: string | undefined) => {
+      if (code === 'invalid_credentials') return 'Incorrect email or password.'
+      if (code === 'email_not_confirmed') return 'Confirm your email first, then sign in.'
+      return 'Something went wrong. Try again in a moment.'
+    },
   },
   signup: {
     title: 'Create account',
@@ -40,7 +47,11 @@ const MODES = {
 }
 
 const formSchema = z.object({
-  email: z.email({ error: 'Enter your email address.' }),
+  email: z
+    .string()
+    .trim()
+    .min(1, 'Enter your email address.')
+    .pipe(z.email({ error: 'Enter a valid email address.' })),
   password: z.string().min(1, 'Enter your password.'),
 })
 
@@ -65,11 +76,15 @@ export function AuthPage({ mode }: { mode: keyof typeof MODES }) {
     else if (failure) alert.current?.focus()
   }, [errors, failure])
 
-  const from = (location.state as { from?: { pathname: string } } | null)?.from?.pathname ?? '/'
-  if (session) return <Navigate to={from} replace />
+  if (session === undefined) return <Loading />
+  if (session) {
+    const from = (location.state as { from?: unknown } | null)?.from
+    return <Navigate to={safeReturnPath(from)} replace />
+  }
 
   async function submit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (pending) return // aria-disabled keeps the focus but not the click
     const form = new FormData(event.currentTarget)
     const parsed = formSchema.safeParse(Object.fromEntries(form))
     const short = mode === 'signup' && String(form.get('password')).length < MIN_PASSWORD
@@ -80,6 +95,7 @@ export function AuthPage({ mode }: { mode: keyof typeof MODES }) {
     if (short && !next.password) next.password = `Use at least ${MIN_PASSWORD} characters.`
     setErrors(next)
     setFailure(undefined)
+    setNotice(false)
     if (!parsed.success || short) return
 
     setPending(true)
@@ -89,8 +105,11 @@ export function AuthPage({ mode }: { mode: keyof typeof MODES }) {
         mode === 'login'
           ? await auth.signInWithPassword(parsed.data)
           : await auth.signUp(parsed.data)
-      if (error) setFailure(copy.failure(error.code))
-      else if (!data.session) setNotice(true)
+      if (error) {
+        setFailure(
+          isRateLimited(error.code, error.status) ? RATE_LIMITED : copy.failure(error.code),
+        )
+      } else if (!data.session) setNotice(true)
     } catch {
       setFailure(copy.failure(undefined))
     } finally {
@@ -135,7 +154,11 @@ export function AuthPage({ mode }: { mode: keyof typeof MODES }) {
               />
             )}
           </Field>
-          <Button type="submit" disabled={pending} className="self-start">
+          <Button
+            type="submit"
+            aria-disabled={pending}
+            className="self-start aria-disabled:cursor-not-allowed aria-disabled:opacity-(--opacity-disabled)"
+          >
             {pending ? copy.pending : copy.title}
           </Button>
         </form>
