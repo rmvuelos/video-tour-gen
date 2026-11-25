@@ -57,15 +57,16 @@ def test_image_plan_keeps_detail_up_to_4096_and_only_has_page_zero() -> None:
 
 
 def test_pdf_is_opened_only_once(monkeypatch: pytest.MonkeyPatch) -> None:
-    opened = []
-    original = pdfium.PdfDocument
+    data = pdf_bytes(2)
+    opened: list[int] = []
+    original_init = pdfium.PdfDocument.__init__
 
-    def spy(*args: object, **kwargs: object) -> pdfium.PdfDocument:
+    def counting_init(self: pdfium.PdfDocument, *args: object, **kwargs: object) -> None:
         opened.append(1)
-        return original(*args, **kwargs)  # type: ignore[arg-type]
+        original_init(self, *args, **kwargs)
 
-    monkeypatch.setattr(pdfium, "PdfDocument", spy)
-    render_plan(pdf_bytes(2), 1)
+    monkeypatch.setattr(pdfium.PdfDocument, "__init__", counting_init)
+    render_plan(data, 1)
 
     assert len(opened) == 1
 
