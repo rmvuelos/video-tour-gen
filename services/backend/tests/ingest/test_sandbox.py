@@ -1,10 +1,11 @@
 import io
+import subprocess
 
 import pytest
 from PIL import Image
 
 from app.ingest import IngestError
-from app.ingest.sandbox import Limits, process_file
+from app.ingest.sandbox import Limits, _parse, process_file
 from tests.ingest_fixtures import encrypted_pdf_bytes, image_bytes, pdf_bytes
 
 
@@ -49,16 +50,24 @@ def test_page_out_of_range_for_plans() -> None:
 def test_memory_limit_becomes_too_large_pixels() -> None:
     big = image_bytes("PNG", (6000, 6000))  # ~108 MB decoded
 
-    assert code(big, "photo", limits=Limits(memory_bytes=300 * 1024**2)) == "too_large_pixels"
+    assert code(big, "photo", limits=Limits(memory_bytes=128 * 1024**2)) == "too_large_pixels"
 
 
 def test_wall_clock_timeout_kills_the_child() -> None:
-    assert code(image_bytes("JPEG"), "photo", limits=Limits(wall_seconds=0.01)) == "too_large_pixels"
+    assert (
+        code(image_bytes("JPEG"), "photo", limits=Limits(wall_seconds=0.01)) == "too_large_pixels"
+    )
 
 
-def test_crash_without_a_result_is_corrupt_file() -> None:
-    # 32 MiB of address space: the interpreter cannot even import the libraries.
-    assert code(image_bytes("JPEG"), "photo", limits=Limits(memory_bytes=32 * 1024**2)) in {
-        "corrupt_file",
-        "too_large_pixels",
-    }
+@pytest.mark.parametrize(
+    ("returncode", "stdout", "expected"),
+    [(-11, b"", "corrupt_file"), (1, b"garbage", "corrupt_file"), (-9, b"", "too_large_pixels"),
+     (-24, b"", "too_large_pixels")],
+)  # fmt: skip
+def test_child_that_dies_without_a_result(returncode: int, stdout: bytes, expected: str) -> None:
+    done = subprocess.CompletedProcess([], returncode, stdout, b"")
+
+    with pytest.raises(IngestError) as exc:
+        _parse(done)
+
+    assert str(exc.value.code) == expected
