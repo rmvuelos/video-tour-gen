@@ -10,7 +10,7 @@ import { App } from './App'
 vi.mock('./lib/supabase', () => ({
   getSupabase: () => ({
     auth: {
-      onAuthStateChange: (cb: (event: string, session: object) => void) => {
+      onAuthStateChange: (cb: (event: string, session: object | null) => void) => {
         cb('INITIAL_SESSION', signedIn.value ? { user: {} } : null)
         return { data: { subscription: { unsubscribe: () => undefined } } }
       },
