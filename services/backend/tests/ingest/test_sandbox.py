@@ -1,11 +1,10 @@
 import io
-import subprocess
 
 import pytest
 from PIL import Image
 
 from app.ingest import IngestError
-from app.ingest.sandbox import Limits, _parse, process_file
+from app.ingest.sandbox import Limits, _interpret, process_file
 from tests.ingest_fixtures import encrypted_pdf_bytes, image_bytes, pdf_bytes
 
 
@@ -59,15 +58,31 @@ def test_wall_clock_timeout_kills_the_child() -> None:
     )
 
 
-@pytest.mark.parametrize(
-    ("returncode", "stdout", "expected"),
-    [(-11, b"", "corrupt_file"), (1, b"garbage", "corrupt_file"), (-9, b"", "too_large_pixels"),
-     (-24, b"", "too_large_pixels")],
-)  # fmt: skip
-def test_child_that_dies_without_a_result(returncode: int, stdout: bytes, expected: str) -> None:
-    done = subprocess.CompletedProcess([], returncode, stdout, b"")
-
+@pytest.mark.parametrize("returncode", [-9, -24, -25])  # KILL (OOM), CPU limit, file size limit
+def test_limit_signals_are_too_large_pixels(returncode: int) -> None:
     with pytest.raises(IngestError) as exc:
-        _parse(done)
+        _interpret(returncode, b"", b"")
 
-    assert str(exc.value.code) == expected
+    assert str(exc.value.code) == "too_large_pixels"
+
+
+def test_a_segfault_is_a_corrupt_file() -> None:
+    with pytest.raises(IngestError) as exc:
+        _interpret(-11, b"", b"")
+
+    assert str(exc.value.code) == "corrupt_file"
+
+
+@pytest.mark.parametrize(("returncode", "out"), [(1, b"garbage"), (0, b""), (2, b"")])
+def test_a_child_bug_is_a_runtime_error_with_the_stderr_logged(
+    returncode: int, out: bytes, caplog: pytest.LogCaptureFixture
+) -> None:
+    with pytest.raises(RuntimeError):
+        _interpret(returncode, out, b"Traceback: boom")
+
+    assert "boom" in caplog.text and f"returncode={returncode}" in caplog.text
+
+
+def test_an_unknown_kind_is_a_bug_not_a_bad_file() -> None:
+    with pytest.raises(RuntimeError):
+        process_file(image_bytes("JPEG"), "video", 0)  # type: ignore[arg-type]
