@@ -1,4 +1,12 @@
 from app.ingest.errors import IngestError, IngestErrorCode
-from app.ingest.media import FileKind, FileType, detect_type
+from app.ingest.media import FileKind, FileType, NormalizedPhoto, detect_type, normalize_photo
 
-__all__ = ["FileKind", "FileType", "IngestError", "IngestErrorCode", "detect_type"]
+__all__ = [
+    "FileKind",
+    "FileType",
+    "IngestError",
+    "IngestErrorCode",
+    "NormalizedPhoto",
+    "detect_type",
+    "normalize_photo",
+]
