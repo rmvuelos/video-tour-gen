@@ -76,24 +76,28 @@ def client(local_stack_only: None) -> Iterator[TestClient]:
 
 
 def _purge_objects(user_id: str) -> None:
-    """Delete what a test user left in Storage: objects live at {user}/{project}/{file}."""
+    """Delete what a test user left in Storage: originals at {user}/{project}/{file}, derived one
+    level deeper ({file}/main.*, thumb.jpg)."""
     base = os.environ["SUPABASE_URL"] + "/storage/v1"
     secret = {"apikey": os.environ["SUPABASE_SECRET_KEY"]}
 
-    def names(prefix: str) -> list[str]:
+    def names(bucket: str, prefix: str) -> list[str]:
         body = {"prefix": prefix, "limit": 1000}
         listed = httpx.post(
-            f"{base}/object/list/originals", headers=secret, json=body, timeout=TIMEOUT
+            f"{base}/object/list/{bucket}", headers=secret, json=body, timeout=TIMEOUT
         )
         listed.raise_for_status()
-        return [item["name"] for item in listed.json()]
+        return [f"{prefix}/{item['name']}" for item in listed.json()]
 
-    for project in names(user_id):
-        paths = [f"{user_id}/{project}/{name}" for name in names(f"{user_id}/{project}")]
+    for bucket, depth in (("originals", 2), ("derived", 3)):
+        level = [user_id]
+        for _ in range(depth - 1):
+            level = [child for folder in level for child in names(bucket, folder)]
+        paths = [leaf for folder in level for leaf in names(bucket, folder)]
         if paths:
             body = {"prefixes": paths}
             httpx.request(
-                "DELETE", f"{base}/object/originals", headers=secret, json=body, timeout=TIMEOUT
+                "DELETE", f"{base}/object/{bucket}", headers=secret, json=body, timeout=TIMEOUT
             )
 
 
