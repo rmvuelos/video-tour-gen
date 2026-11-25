@@ -6,6 +6,9 @@ test('the sign-in page renders and links to signup', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible()
   const dir = process.env['DESIGN_SHOTS_DIR']
   if (dir) await page.screenshot({ path: `${dir}/login.png` })
+  await page.keyboard.press('Tab')
+  await expect(page.getByLabel(/Email/)).toBeFocused()
+  if (dir) await page.screenshot({ path: `${dir}/login-focus.png` })
   await page.getByRole('link', { name: 'Create an account' }).click()
   await expect(page.getByRole('heading', { name: 'Create account' })).toBeVisible()
 })
