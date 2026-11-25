@@ -150,6 +150,9 @@
   /* Derived: input height = soft button height; progress bar thickness. */
   --spacing-field: 47px;
   --spacing-progress: 8px;
+  --spacing-icon-lg: 34px;
+  --spacing-tile: 90px;
+  --spacing-dropzone: 341px;
   --spacing-icon: 24px;
   --spacing-icon-sm: 20px;
   --spacing-step: 30px;
