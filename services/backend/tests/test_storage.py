@@ -133,8 +133,8 @@ def test_download_returns_the_raw_bytes_and_none_when_missing() -> None:
 
     client = make(httpx.MockTransport(handle))
 
-    assert client.download("originals", PATH) == b"\x00raw"
-    assert client.download("originals", "u1/p1/other") is None
+    assert client.download("originals", PATH, 100) == b"\x00raw"
+    assert client.download("originals", "u1/p1/other", 100) is None
 
 
 def test_upload_overwrites_so_a_retry_is_idempotent() -> None:
@@ -147,3 +147,16 @@ def test_upload_overwrites_so_a_retry_is_idempotent() -> None:
     assert calls[0].headers["x-upsert"] == "true"
     assert calls[0].headers["content-type"] == "image/jpeg"
     assert calls[0].content == b"jpg"
+
+
+def test_download_stops_reading_one_byte_past_the_cap() -> None:
+    client = make(httpx.MockTransport(lambda r: httpx.Response(200, content=b"x" * 100)))
+
+    assert len(client.download("originals", PATH, 10) or b"") == 11
+
+
+def test_download_failures_are_a_502() -> None:
+    with pytest.raises(ApiError) as exc:
+        make(transport(500, {}, [])).download("originals", PATH, 10)
+
+    assert exc.value.status_code == 502

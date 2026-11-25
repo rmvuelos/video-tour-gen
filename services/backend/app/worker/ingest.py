@@ -16,20 +16,20 @@ from celery.exceptions import SoftTimeLimitExceeded
 
 from app.db import Pool, connection, create_pool
 from app.errors import ApiError
-from app.files import input_limits
+from app.files import _owned_path, input_limits
 from app.ingest import IngestError, IngestErrorCode
 from app.ingest.media import FileKind
 from app.ingest.sandbox import process_file
 from app.storage import DERIVED, ORIGINALS, ObjectStorage, create_storage
 from app.worker import celery_app
+from app.worker.limits import HARD_TIME_LIMIT, SOFT_TIME_LIMIT
 
 logger = logging.getLogger(__name__)
 
 MAX_RETRIES = 3
 BACKOFF_SECONDS = 5  # 5, 10, 20
-SOFT_TIME_LIMIT = 900  # 11 files x the 60 s wall limit of the sandbox, with slack
-HARD_TIME_LIMIT = SOFT_TIME_LIMIT + 60
-TRANSIENT = (ApiError, psycopg.OperationalError)  # Storage (502) or DB (503) is down
+TRANSIENT = (ApiError, psycopg.OperationalError)  # candidates: see _is_transient
+RETRYABLE_STATUS = (502, 503)  # Storage or DB is down; any other ApiError is a bug
 
 # Every query is filtered by user_id: the DB role bypasses RLS (P-5).
 CLAIM = (
@@ -39,7 +39,8 @@ CLAIM = (
 )
 FILES = (
     "select id, kind, page_index, original_path from project_files "
-    "where project_id = %s and user_id = %s and status = 'uploaded' order by created_at"
+    "where project_id = %s and user_id = %s and status = 'uploaded' "
+    "order by (kind = 'plan') desc, created_at, id"
 )
 VALID = (
     "update project_files set status = 'valid', error_code = null, width = %s, height = %s, "
@@ -72,10 +73,19 @@ def _max_bytes(kind: FileKind) -> int:
     return (limits.floor_plan if kind == "plan" else limits.photos).max_bytes
 
 
-def _store(storage: ObjectStorage, row: dict[str, Any]) -> tuple[Any, ...] | IngestErrorCode:
+def _is_transient(exc: Exception) -> bool:
+    if isinstance(exc, ApiError):
+        return exc.status_code in RETRYABLE_STATUS
+    return True  # OperationalError
+
+
+def _store(
+    storage: ObjectStorage, row: dict[str, Any], job: dict[str, Any]
+) -> tuple[Any, ...] | IngestErrorCode:
     """Download, derive, upload. Returns the VALID params, or the file's error code."""
     kind: FileKind = row["kind"]
-    original = storage.download(ORIGINALS, row["original_path"])
+    path = _owned_path(row["original_path"], job["user_id"], job["project_id"])
+    original = storage.download(ORIGINALS, path, _max_bytes(kind))  # capped stream
     if original is None:
         return IngestErrorCode.ORIGINAL_MISSING
     if len(original) > _max_bytes(kind):  # before any parsing
@@ -95,7 +105,7 @@ def _process_files(pool: Pool, storage: ObjectStorage, job: dict[str, Any]) -> N
     with connection(pool) as conn:
         rows = conn.execute(FILES, (job["project_id"], job["user_id"])).fetchall()
     for row in rows:
-        result = _store(storage, row)  # network and CPU: no connection held
+        result = _store(storage, row, job)  # network and CPU: no connection held
         with connection(pool) as conn:
             if isinstance(result, IngestErrorCode):
                 conn.execute(INVALID, (result.value, row["id"], job["user_id"]))
@@ -137,6 +147,9 @@ def ingest(self: Task, job_id: str) -> None:
         _process_files(pool, storage, job)
         _finish(pool, job, "done")
     except TRANSIENT as exc:
+        if not _is_transient(exc):
+            _give_up(pool, job, "internal_error")
+            raise
         if self.request.retries >= MAX_RETRIES:
             _give_up(pool, job, "storage_unavailable")
             return

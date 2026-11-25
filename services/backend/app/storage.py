@@ -12,7 +12,8 @@ logger = logging.getLogger(__name__)
 ORIGINALS = "originals"
 DERIVED = "derived"
 TIMEOUT = httpx.Timeout(10, connect=3)
-TRANSFER_TIMEOUT = httpx.Timeout(60, connect=3)  # originals are up to 20 MB
+TRANSFER_SECONDS = 60  # originals are up to 20 MB
+TRANSFER_TIMEOUT = httpx.Timeout(TRANSFER_SECONDS, connect=3)
 LIST_LIMIT = 1000
 ISSUER_SUFFIX = "/auth/v1"
 
@@ -22,7 +23,7 @@ class ObjectStorage(Protocol):
     def size(self, path: str) -> int | None: ...
     def delete(self, bucket: str, paths: list[str]) -> None: ...
     def delete_prefix(self, bucket: str, prefix: str) -> None: ...
-    def download(self, bucket: str, path: str) -> bytes | None: ...
+    def download(self, bucket: str, path: str, max_bytes: int) -> bytes | None: ...
     def upload(self, bucket: str, path: str, data: bytes, content_type: str) -> None: ...
 
 
@@ -90,9 +91,27 @@ class StorageClient:
     def delete(self, bucket: str, paths: list[str]) -> None:
         self._call("DELETE", f"/object/{bucket}", json={"prefixes": paths})
 
-    def download(self, bucket: str, path: str) -> bytes | None:
-        response = self._call("GET", f"/object/{bucket}/{path}", timeout=TRANSFER_TIMEOUT)
-        return None if response is None else response.content
+    def download(self, bucket: str, path: str, max_bytes: int) -> bytes | None:
+        """The object, read as a stream and cut one byte past `max_bytes`: the caller compares."""
+        try:
+            with self._http.stream(
+                "GET", f"/object/{bucket}/{path}", timeout=TRANSFER_TIMEOUT
+            ) as response:
+                if response.is_error:
+                    response.read()  # error bodies are small; _is_missing needs the JSON
+                    if _is_missing(response):
+                        return None
+                    logger.warning("storage answered %s on GET", response.status_code)
+                    raise _unavailable()
+                body = bytearray()
+                for chunk in response.iter_bytes():
+                    body += chunk
+                    if len(body) > max_bytes:
+                        break
+                return bytes(body[: max_bytes + 1])
+        except httpx.HTTPError as exc:
+            logger.warning("storage unreachable: %s", type(exc).__name__)
+            raise _unavailable() from exc
 
     def upload(self, bucket: str, path: str, data: bytes, content_type: str) -> None:
         # x-upsert: a retried job overwrites what a half-finished attempt left.
