@@ -66,6 +66,11 @@ const TEXT_PAIRS = TEXT_COLORS.flatMap((fg) =>
 ).concat([
   ['color-fg-on-action', 'color-action'],
   ['color-fg-on-action', 'color-action-hover'],
+  // Error text (field errors, alerts) sits on the light surfaces.
+  ...['color-canvas', 'color-surface', 'color-surface-subtle'].map((bg): [string, string] => [
+    'color-danger',
+    bg,
+  ]),
 ])
 
 // Icons, status dots and the focus ring need 3:1 (WCAG 1.4.11).
@@ -75,6 +80,7 @@ const GRAPHICS = [
   'color-danger',
   'color-icon-muted',
   'color-focus',
+  'color-field-border',
 ]
 const GRAPHIC_SURFACES = ['color-surface', 'color-surface-subtle', 'color-canvas', 'color-selected']
 const GRAPHIC_NOT_USED_ON: Record<string, string[]> = {
