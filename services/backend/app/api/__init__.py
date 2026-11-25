@@ -8,16 +8,19 @@ from app.db import create_pool
 from app.errors import install_error_handlers
 from app.projects import router as projects_router
 from app.startup import validate_startup
+from app.storage import create_storage
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     validate_startup()  # fail fast when the process starts with a bad setup
     app.state.pool = create_pool()
+    app.state.storage = create_storage()
     try:
         yield
     finally:
         app.state.pool.close()
+        app.state.storage.close()
 
 
 app = FastAPI(title="video-tour-gen api", lifespan=lifespan)
