@@ -19,7 +19,8 @@ NOW = datetime(2026, 1, 1, tzinfo=UTC)
 JOB_ID = uuid.uuid4()
 FAILED = {
     "id": JOB_ID, "project_id": PROJECT_ID, "status": "failed", "error_code": "storage_unavailable",
-    "attempts": 4, "stale": False, "created_at": NOW, "started_at": NOW, "finished_at": NOW, "duration_ms": 1200,
+    "attempts": 4, "stale": False, "created_at": NOW, "started_at": NOW,
+    "finished_at": NOW, "duration_ms": 1200,
 }  # fmt: skip
 NEW_JOB = {"id": uuid.uuid4(), "project_id": PROJECT_ID, "status": "queued", "created_at": NOW}
 FILE = {"id": uuid.uuid4(), "kind": "photo", "status": "invalid", "error_code": "corrupt_file",
@@ -32,14 +33,14 @@ class Env:
         self.sent: list[tuple[str, list[str]]] = []
         self.send_error: Exception | None = None
         self.pool.on("for update", [{"id": PROJECT_ID, "status": "ingesting"}])
-        self.pool.on("order by created_at desc limit 1", [FAILED])
+        self.pool.on("created_at desc, id desc limit 1", [FAILED])
         self.pool.on("from project_files", [FILE])
         self.pool.on("insert into jobs", [NEW_JOB])
 
     def latest(self, **changes: Any) -> None:
         self.pool.answers = [a for a in self.pool.answers if "limit 1" not in a[0]]
         self.pool.on(
-            "order by created_at desc limit 1",
+            "created_at desc, id desc limit 1",
             [{**FAILED, **changes}] if changes != {"none": 1} else [],
         )
 
@@ -74,7 +75,7 @@ def test_latest_job_comes_with_the_state_of_each_file(client: TestClient, env: E
     assert body["id"] == str(JOB_ID) and body["status"] == "failed"
     assert body["error_code"] == "storage_unavailable" and body["duration_ms"] == 1200
     assert body["files"] == [{**FILE, "id": str(FILE["id"])}]
-    assert env.pool.ran("order by created_at desc limit 1") == [(PROJECT_ID, USER.id)]
+    assert env.pool.ran("created_at desc, id desc limit 1") == [(PROJECT_ID, USER.id)]
     assert env.pool.ran("from project_files") == [(PROJECT_ID, USER.id)]
 
 
