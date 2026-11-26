@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import type { UploadStatus } from './upload-rules'
 import { canSubmit, errorCodeMessage, rejectionMessage, remainingSlots } from './upload-rules'
 
 const jpg = { name: 'kitchen.jpg', size: 1000, type: 'image/jpeg' }
 const gif = { name: 'a.gif', size: 10, type: 'image/gif' }
-const state = (kind: 'plan' | 'photo', status: string) => ({ kind, status })
-const photos = (n: number, status = 'uploaded') =>
+const state = (kind: 'plan' | 'photo', status: UploadStatus) => ({ kind, status })
+const photos = (n: number, status: UploadStatus = 'uploaded') =>
   Array.from({ length: n }, () => state('photo', status))
 const plan = state('plan', 'valid')
 
@@ -102,11 +103,25 @@ describe('canSubmit', () => {
     })
   })
 
-  it('tells apart files still uploading from files with errors', () => {
-    expect(canSubmit([plan, ...photos(3), state('photo', 'pending')])).toEqual({
+  it('counts server-pending files as done, since submit verifies the objects', () => {
+    expect(canSubmit([state('plan', 'pending'), ...photos(3, 'pending')])).toEqual({ ok: true })
+  })
+
+  it('waits for files still uploading', () => {
+    expect(canSubmit([plan, ...photos(3), state('photo', 'uploading')])).toEqual({
       ok: false,
       reason: 'Wait for the uploads to finish.',
     })
+  })
+
+  it('asks to retry or remove files that failed to upload', () => {
+    expect(canSubmit([plan, ...photos(3), state('photo', 'failed')])).toEqual({
+      ok: false,
+      reason: 'Retry or remove the files that failed to upload.',
+    })
+  })
+
+  it('asks to replace files the server marked invalid', () => {
     expect(canSubmit([plan, ...photos(3), state('photo', 'invalid')])).toEqual({
       ok: false,
       reason: 'Remove or replace the files with errors.',
@@ -138,6 +153,18 @@ describe('errorCodeMessage', () => {
     'original_missing',
   ])('has a specific message for %s', (code) => {
     expect(errorCodeMessage(code)).not.toBe(errorCodeMessage('something_new'))
+  })
+
+  it.each([
+    ['invalid_file', 'This file has errors. Replace or remove it.'],
+    ['enqueue_failed', 'We could not start processing. Try again in a moment.'],
+    ['job_not_failed', 'There is nothing to retry.'],
+    ['worker_lost', 'Processing was interrupted. Try again.'],
+    ['project_not_editable', "This project was already sent, so its files can't be changed."],
+    ['too_many_files', 'Too many files. Remove some and try again.'],
+    ['pdf_encrypted', 'The PDF is password protected. Remove the password and try again.'],
+  ])('says exactly the right thing for %s', (code, text) => {
+    expect(errorCodeMessage(code)).toBe(text)
   })
 
   it('prefixes the file name when given', () => {
