@@ -23,6 +23,15 @@ describe('parseArea', () => {
     },
   )
 
+  it.each(['1,000', '12,345', '1,000.5'])('rejects %j as a thousands separator', (text) => {
+    expect(areaError(text)).toBe('Use a dot or comma for decimals, without thousands separators.')
+  })
+
+  it('still takes a comma with one or two decimals', () => {
+    expect(parseArea('1,5')).toEqual({ value: 1.5 })
+    expect(parseArea('1,25')).toEqual({ value: 1.25 })
+  })
+
   it('says the maximum', () => {
     expect(areaError('999999')).toContain('100,000')
   })
