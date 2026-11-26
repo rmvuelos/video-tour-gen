@@ -55,8 +55,17 @@ export const remainingSlots = (kind: FileKind, existingCount: number) =>
 
 type Check = { ok: true } | { ok: false; reason: string }
 
-/** Exactly one plan and 3-10 photos, all stored; otherwise the hint to show. */
-export function canSubmit(files: { kind: FileKind; status: string }[]): Check {
+/**
+ * Server statuses (GET /files) plus the two local ones of a browser upload. The backend only sets
+ * `uploaded` inside submit, so a file whose PUT finished (or after a reload) reads `pending`.
+ */
+export type UploadStatus = 'pending' | 'uploaded' | 'valid' | 'invalid' | 'uploading' | 'failed'
+
+/**
+ * Exactly one plan and 3-10 photos, none uploading, failed or invalid; otherwise the hint to show.
+ * `pending` counts as done: submit verifies the objects and reports missing_object/size_mismatch.
+ */
+export function canSubmit(files: { kind: FileKind; status: UploadStatus }[]): Check {
   const plans = files.filter((f) => f.kind === 'plan').length
   const photos = files.filter((f) => f.kind === 'photo').length
   const fail = (reason: string): Check => ({ ok: false, reason })
@@ -71,9 +80,10 @@ export function canSubmit(files: { kind: FileKind; status: string }[]): Check {
   if (files.some((f) => f.status === 'invalid')) {
     return fail('Remove or replace the files with errors.')
   }
-  if (files.some((f) => f.status !== 'uploaded' && f.status !== 'valid')) {
-    return fail('Wait for the uploads to finish.')
+  if (files.some((f) => f.status === 'failed')) {
+    return fail('Retry or remove the files that failed to upload.')
   }
+  if (files.some((f) => f.status === 'uploading')) return fail('Wait for the uploads to finish.')
   return { ok: true }
 }
 
@@ -83,7 +93,7 @@ const MESSAGES: Record<string, string> = {
   too_large: TOO_LARGE,
   file_too_large: TOO_LARGE,
   unsupported_type: 'This file type is not supported. Use JPG, PNG, WebP or PDF (plan).',
-  too_many_files: `Too many files. The maximum is ${RULES.photo.max} photos.`,
+  too_many_files: 'Too many files. Remove some and try again.',
   too_many_plans: 'Only one floor plan is allowed. Remove the extra one.',
   too_few_photos: `Add at least ${MIN_PHOTOS} photos.`,
   missing_plan: 'Add the floor plan.',
@@ -91,7 +101,11 @@ const MESSAGES: Record<string, string> = {
   original_missing: NOT_FINISHED,
   size_mismatch: 'The uploaded file does not match the chosen one. Upload it again.',
   files_changed: 'The files changed while sending. Review them and try again.',
-  project_not_editable: 'This project is being processed and cannot be changed now.',
+  project_not_editable: "This project was already sent, so its files can't be changed.",
+  invalid_file: 'This file has errors. Replace or remove it.',
+  enqueue_failed: 'We could not start processing. Try again in a moment.',
+  job_not_failed: 'There is nothing to retry.',
+  worker_lost: 'Processing was interrupted. Try again.',
   invalid_files: 'Some files are not valid. Fix them and try again.',
   kind_mismatch:
     'This file is in the wrong place. Use a plan for the plan and photos for the rest.',
