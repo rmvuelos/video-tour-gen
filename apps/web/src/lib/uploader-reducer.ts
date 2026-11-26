@@ -8,8 +8,8 @@ export type UploaderItem = {
   mime: string
   status: UploadStatus
   /** 0..1 while uploading. */
-  progress?: number
-  error?: string
+  progress?: number | undefined
+  error?: string | undefined
   /** Only for files added in this session (thumbnails); never for items from the server. */
   file?: File
 }
