@@ -16,6 +16,14 @@ export class PutUploadError extends Error {
 
 type Options = { onProgress?: (fraction: number) => void; signal?: AbortSignal }
 
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]'])
+
+/** https anywhere; plain http only for the local Supabase; never credentials in the URL. */
+const isAllowed = ({ protocol, hostname, username, password }: URL) =>
+  !username &&
+  !password &&
+  (protocol === 'https:' || (protocol === 'http:' && LOCAL_HOSTS.has(hostname)))
+
 const abortError = () => new DOMException('The upload was cancelled.', 'AbortError')
 
 /**
@@ -35,7 +43,7 @@ export function putUpload(
     } catch {
       // handled below
     }
-    if (parsed?.protocol !== 'https:' && parsed?.protocol !== 'http:') {
+    if (!parsed || !isAllowed(parsed)) {
       return reject(new PutUploadError('invalid_url', 'The upload address is not valid.'))
     }
     if (signal?.aborted) return reject(abortError())
@@ -46,9 +54,20 @@ export function putUpload(
       signal?.removeEventListener('abort', onAbort)
       settle()
     }
-    request.open('PUT', parsed.href)
+    signal?.addEventListener('abort', onAbort, { once: true })
+    try {
+      request.open('PUT', parsed.href)
+    } catch {
+      signal?.removeEventListener('abort', onAbort)
+      return reject(new PutUploadError('invalid_url', 'The upload address is not valid.'))
+    }
     request.timeout = TIMEOUT_MS
-    for (const [name, value] of Object.entries(headers)) request.setRequestHeader(name, value)
+    try {
+      for (const [name, value] of Object.entries(headers)) request.setRequestHeader(name, value)
+    } catch {
+      signal?.removeEventListener('abort', onAbort)
+      return reject(new PutUploadError('network_error', 'Could not start the upload.'))
+    }
     request.upload.onprogress = (event) => {
       if (event.lengthComputable && event.total > 0) onProgress?.(event.loaded / event.total)
     }
@@ -63,7 +82,6 @@ export function putUpload(
     request.ontimeout = () =>
       finish(() => reject(new PutUploadError('timeout', 'The upload took too long.')))
     request.onabort = () => finish(() => reject(abortError()))
-    signal?.addEventListener('abort', onAbort, { once: true })
     request.send(file)
   })
 }
