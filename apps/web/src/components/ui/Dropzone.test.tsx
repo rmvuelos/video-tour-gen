@@ -135,6 +135,13 @@ describe('Dropzone', () => {
     expect(await screen.findByText('This file type is not supported')).toBeInTheDocument()
   })
 
+  it('uses the custom rejection text when given', async () => {
+    const rejectionText = vi.fn(({ file }: { file: File }) => `custom ${file.name}`)
+    const { input } = setup({ rejectionText })
+    await userEvent.setup({ applyAccept: false }).upload(input, jpg('big.jpg', 500))
+    expect(await screen.findByRole('alert')).toHaveTextContent('custom big.jpg')
+  })
+
   it('disables the button when disabled', () => {
     setup({ disabled: true })
     expect(screen.getByRole('button', { name: 'Choose media' })).toBeDisabled()

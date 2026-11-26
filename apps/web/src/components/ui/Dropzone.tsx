@@ -18,6 +18,8 @@ type Props = Omit<ComponentProps<'div'>, 'title' | 'children' | 'role'> & {
   disabled?: boolean
   onFilesAccepted: (files: File[]) => void
   onFilesRejected?: (rejections: FileRejection[]) => void
+  /** Replaces the built-in text for one rejected file (e.g. to mention HEIC). */
+  rejectionText?: (rejection: FileRejection) => string
 }
 
 const FORMATS: Record<string, string> = {
@@ -57,6 +59,7 @@ export function Dropzone(props: Props) {
     disabled,
     onFilesAccepted,
     onFilesRejected,
+    rejectionText,
     ref,
     ...rest
   } = props
@@ -73,7 +76,7 @@ export function Dropzone(props: Props) {
     // One message per distinct reason; a new drop remounts the list so it is announced again.
     onDrop: (_accepted, rejections) =>
       setRejected((prev) => ({
-        messages: [...new Set(rejections.map((r) => reason(r, props)))],
+        messages: [...new Set(rejections.map((r) => rejectionText?.(r) ?? reason(r, props)))],
         drop: prev.drop + 1,
       })),
     onDropAccepted: (files) => onFilesAccepted(files),
