@@ -5,7 +5,7 @@ import { Breadcrumb } from '../components/ui/Breadcrumb'
 import { Sidebar } from '../components/ui/Sidebar'
 import { getSupabase } from '../lib/supabase'
 
-// shortcut: "Upload assets" has no project to open until the uploader (4d); it points at the list.
+// shortcut: the uploader lives at /projects/:id, but the sidebar has no current project; it points at the list.
 const HREFS = { upload: '/projects', projects: '/projects' }
 
 function userLabel(email: string | undefined) {

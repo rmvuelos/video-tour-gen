@@ -15,9 +15,14 @@ type Props = Omit<ComponentProps<'div'>, 'title' | 'children' | 'role'> & {
   accept: Accept
   maxSize: number
   maxFiles: number
+  /** Blocks drops. The button stays focusable (aria-disabled) so focus is not lost. */
   disabled?: boolean
+  /** Visible text for why it is disabled; the button is described by it. */
+  disabledReason?: string
   onFilesAccepted: (files: File[]) => void
   onFilesRejected?: (rejections: FileRejection[]) => void
+  /** Replaces the built-in text for one rejected file (e.g. to mention HEIC). */
+  rejectionText?: (rejection: FileRejection) => string
 }
 
 const FORMATS: Record<string, string> = {
@@ -55,13 +60,15 @@ export function Dropzone(props: Props) {
     maxSize,
     maxFiles,
     disabled,
+    disabledReason,
     onFilesAccepted,
     onFilesRejected,
+    rejectionText,
     ref,
     ...rest
   } = props
-  const [rejected, setRejected] = useState({ messages: [] as string[], drop: 0 })
-  const [titleId, helpId] = [useId(), useId()]
+  const [rejected, setRejected] = useState({ messages: [] as string[], drop: 0, forMax: maxFiles })
+  const [titleId, helpId, reasonId] = [useId(), useId(), useId()]
   const Heading = `h${titleLevel}` as const
   const { getRootProps, getInputProps, open, isDragActive, isDragReject } = useDropzone({
     accept,
@@ -73,12 +80,19 @@ export function Dropzone(props: Props) {
     // One message per distinct reason; a new drop remounts the list so it is announced again.
     onDrop: (_accepted, rejections) =>
       setRejected((prev) => ({
-        messages: [...new Set(rejections.map((r) => reason(r, props)))],
+        messages: [...new Set(rejections.map((r) => rejectionText?.(r) ?? reason(r, props)))],
         drop: prev.drop + 1,
+        forMax: maxFiles,
       })),
     onDropAccepted: (files) => onFilesAccepted(files),
     onDropRejected: (rejections) => onFilesRejected?.(rejections),
   })
+  const openDialog = () => {
+    setRejected((prev) => ({ ...prev, messages: [] }))
+    open()
+  }
+  // More room than when the message was written (a file was removed) makes it stale.
+  const messages = maxFiles > rejected.forMax ? [] : rejected.messages
   // Dragging: solid stroke and a text, never only color. Idle: the dashed Figma border.
   const dash = isDragReject ? 'reject' : isDragActive ? 'active' : undefined
   const { rootRef, ...root } = getRootProps({
@@ -113,15 +127,26 @@ export function Dropzone(props: Props) {
             {isDragReject ? 'This file type is not supported' : 'Drop to upload'}
           </p>
         )}
-        <Button onClick={open} disabled={disabled} aria-describedby={helpId}>
+        {disabled && disabledReason && (
+          <p id={reasonId} className="text-body font-medium">
+            {disabledReason}
+          </p>
+        )}
+        <Button
+          onClick={disabled ? undefined : openDialog}
+          aria-disabled={disabled || undefined}
+          aria-describedby={disabled && disabledReason ? `${helpId} ${reasonId}` : helpId}
+        >
           {buttonLabel}
         </Button>
-        {rejected.messages.length > 0 && (
-          <ul key={rejected.drop} role="alert" className="text-caption font-medium text-danger">
-            {rejected.messages.map((m, i) => (
-              <li key={`${i}-${m}`}>{m}</li>
-            ))}
-          </ul>
+        {messages.length > 0 && (
+          <div key={rejected.drop} role="alert" className="text-caption font-medium text-danger">
+            <ul>
+              {messages.map((m, i) => (
+                <li key={`${i}-${m}`}>{m}</li>
+              ))}
+            </ul>
+          </div>
         )}
       </Card>
     </div>

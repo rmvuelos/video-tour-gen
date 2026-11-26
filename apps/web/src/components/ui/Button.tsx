@@ -27,7 +27,7 @@ export function Button({
   return (
     <button
       type={type}
-      className={`inline-flex cursor-pointer items-center justify-center border-2 border-transparent whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-(--opacity-disabled) ${VARIANTS[variant]} ${className}`}
+      className={`inline-flex cursor-pointer items-center justify-center border-2 border-transparent whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-(--opacity-disabled) aria-disabled:cursor-not-allowed aria-disabled:opacity-(--opacity-disabled) ${VARIANTS[variant]} ${className}`}
       {...rest}
     >
       {children}

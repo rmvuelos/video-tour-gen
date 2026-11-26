@@ -4,7 +4,7 @@ type Kind = 'plan' | 'photo'
 type JobStatus = 'queued' | 'running' | 'done' | 'failed'
 type Signal = AbortSignal | null
 
-export type FileStatus = 'pending' | 'uploaded' | 'valid' | 'invalid'
+type FileStatus = 'pending' | 'uploaded' | 'valid' | 'invalid'
 export type ProjectFile = {
   id: string
   kind: Kind

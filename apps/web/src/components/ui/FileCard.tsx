@@ -45,13 +45,14 @@ export function FileCard({ file: f, preview, onRemove, className = '', ...state 
             {f.name}
           </p>
           <p className="text-caption text-fg-muted">
-            {formatBytes(f.size)} �{' '}
+            {formatBytes(f.size)} <span aria-hidden="true">·</span>{' '}
             {state.status === 'uploading' ? `Uploading ${percent}%` : STATUS_TEXT[state.status]}
           </p>
         </div>
         <button
           type="button"
           aria-label={`Remove ${f.name}`}
+          aria-describedby={state.status === 'error' ? messageId : undefined}
           onClick={onRemove}
           className="cursor-pointer rounded-pill p-2 text-fg"
         >

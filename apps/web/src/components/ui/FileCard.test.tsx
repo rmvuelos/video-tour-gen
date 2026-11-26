@@ -100,4 +100,16 @@ describe('FileCard', () => {
       expect(revoked).not.toHaveBeenCalled()
     })
   })
+
+  it('separates size and status with a hidden dot, not a broken character', () => {
+    const { container } = render(<FileCard {...base} status="pending" />)
+    expect(container).not.toHaveTextContent('�')
+    expect(screen.getByText('·')).toHaveAttribute('aria-hidden', 'true')
+  })
+
+  it('describes the remove button with the error message too', () => {
+    render(<FileCard {...base} status="error" error="Could not reach the server." />)
+    const remove = screen.getByRole('button', { name: 'Remove salon.jpg' })
+    expect(remove).toHaveAccessibleDescription(/Could not reach the server\./)
+  })
 })

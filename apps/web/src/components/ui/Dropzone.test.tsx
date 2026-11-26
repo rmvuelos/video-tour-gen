@@ -1,5 +1,5 @@
 import { createRef } from 'react'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import grid from '../../assets/icons/grid-sm.svg'
@@ -12,22 +12,21 @@ const jpg = (name = 'salon.jpg', size = 10) =>
 function setup(props: Partial<Parameters<typeof Dropzone>[0]> = {}) {
   const onFilesAccepted = vi.fn()
   const onFilesRejected = vi.fn()
-  const view = render(
-    <Dropzone
-      title="Photos"
-      help="JPG, PNG up to 12 MB"
-      buttonLabel="Choose media"
-      icon={grid}
-      accept={ACCEPT}
-      maxSize={100}
-      maxFiles={2}
-      onFilesAccepted={onFilesAccepted}
-      onFilesRejected={onFilesRejected}
-      {...props}
-    />,
-  )
+  const all = {
+    title: 'Photos',
+    help: 'JPG, PNG up to 12 MB',
+    buttonLabel: 'Choose media',
+    icon: grid,
+    accept: ACCEPT,
+    maxSize: 100,
+    maxFiles: 2,
+    onFilesAccepted,
+    onFilesRejected,
+    ...props,
+  }
+  const view = render(<Dropzone {...all} />)
   const input = view.container.querySelector('input[type=file]') as HTMLInputElement
-  return { onFilesAccepted, onFilesRejected, input, view }
+  return { onFilesAccepted, onFilesRejected, input, view, props: all }
 }
 
 const drag = (target: Element, files: File[]) =>
@@ -135,8 +134,58 @@ describe('Dropzone', () => {
     expect(await screen.findByText('This file type is not supported')).toBeInTheDocument()
   })
 
-  it('disables the button when disabled', () => {
-    setup({ disabled: true })
-    expect(screen.getByRole('button', { name: 'Choose media' })).toBeDisabled()
+  it('uses the custom rejection text when given', async () => {
+    const rejectionText = vi.fn(({ file }: { file: File }) => `custom ${file.name}`)
+    const { input } = setup({ rejectionText })
+    await userEvent.setup({ applyAccept: false }).upload(input, jpg('big.jpg', 500))
+    expect(await screen.findByRole('alert')).toHaveTextContent('custom big.jpg')
+  })
+
+  it('keeps a disabled button focusable with the reason as text, and blocks drops', async () => {
+    const { onFilesAccepted, input } = setup({
+      disabled: true,
+      disabledReason: '10 of 10 photos added. Remove one to add more.',
+    })
+    const button = screen.getByRole('button', { name: 'Choose media' })
+    expect(button).toHaveAttribute('aria-disabled', 'true')
+    expect(button).not.toBeDisabled()
+    expect(button).toHaveAccessibleDescription(/10 of 10 photos added\. Remove one to add more\./)
+    expect(screen.getByText('10 of 10 photos added. Remove one to add more.')).toBeVisible()
+    await userEvent.setup().tab()
+    expect(button).toHaveFocus()
+    fireEvent.change(input, { target: { files: [jpg()] } })
+    await waitFor(() => expect(onFilesAccepted).not.toHaveBeenCalled())
+  })
+
+  it('wraps the rejections in an alert container that keeps the list semantics', async () => {
+    const { input } = setup()
+    fireEvent.change(input, { target: { files: [jpg('big.jpg', 500)] } })
+    const alert = await screen.findByRole('alert')
+    expect(alert.tagName).toBe('DIV')
+    expect(within(alert).getByRole('list')).toBeInTheDocument()
+  })
+
+  it('clears old rejections when the file dialog opens', async () => {
+    const { input } = setup()
+    fireEvent.change(input, { target: { files: [jpg('big.jpg', 500)] } })
+    await screen.findByRole('alert')
+    await userEvent.click(screen.getByRole('button', { name: 'Choose media' }))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('clears old rejections after an accepted drop', async () => {
+    const { input } = setup()
+    fireEvent.change(input, { target: { files: [jpg('big.jpg', 500)] } })
+    await screen.findByRole('alert')
+    fireEvent.change(input, { target: { files: [jpg('ok.jpg')] } })
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
+  })
+
+  it('clears old rejections when more files fit than before', async () => {
+    const { input, view, props } = setup({ maxFiles: 1 })
+    fireEvent.change(input, { target: { files: [jpg('a.jpg'), jpg('b.jpg')] } })
+    await screen.findByRole('alert')
+    view.rerender(<Dropzone {...props} maxFiles={2} />)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 })
