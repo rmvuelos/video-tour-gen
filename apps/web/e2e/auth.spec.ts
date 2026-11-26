@@ -24,7 +24,7 @@ test.describe('against the local Supabase', () => {
     await page.getByLabel(/Email/).fill(email)
     await page.getByLabel(/Password/).fill(password)
     await page.getByRole('button', { name: 'Create account' }).click()
-    await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'My projects' })).toBeVisible()
 
     await page.getByRole('button', { name: 'Sign out' }).click()
     await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible()
@@ -34,6 +34,6 @@ test.describe('against the local Supabase', () => {
     await page.getByLabel(/Email/).fill(email)
     await page.getByLabel(/Password/).fill(password)
     await page.getByRole('button', { name: 'Sign in' }).click()
-    await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'My projects' })).toBeVisible()
   })
 })

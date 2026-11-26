@@ -3,6 +3,10 @@ import { MemoryRouter } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
 
 const signedIn = vi.hoisted(() => ({ value: true }))
+vi.mock('./lib/api', async (importActual) => ({
+  ...(await importActual<typeof import('./lib/api')>()),
+  apiFetch: () => new Promise(() => undefined),
+}))
 import { SessionProvider } from './auth/session'
 import { App } from './App'
 
@@ -29,9 +33,9 @@ function renderAt(path: string) {
 }
 
 describe('App', () => {
-  it('renders the home page inside the shell for a signed-in user', () => {
+  it('lands on My projects inside the shell for a signed-in user', () => {
     renderAt('/')
-    expect(screen.getByRole('heading', { name: 'Welcome back' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'My projects' })).toBeInTheDocument()
   })
 })
 
@@ -50,9 +54,9 @@ describe('App unknown route', () => {
     expect(screen.getByRole('heading', { name: 'Page not found' })).toBeInTheDocument()
   })
 
-  it('titles the home page', () => {
+  it('titles the projects page', () => {
     renderAt('/')
-    expect(document.title).toBe('Home · rooma')
+    expect(document.title).toBe('My projects · rooma')
   })
 })
 
