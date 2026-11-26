@@ -8,6 +8,7 @@ vi.mock('../lib/supabase', () => ({ getSupabase: () => ({ auth: { signOut: mock.
 vi.mock('../auth/session', () => ({ useSession: () => mock.session }))
 
 import { PageTitle } from '../components/PageTitle'
+import { useProjectCrumb } from '../lib/use-project-crumb'
 import { AppShell } from './AppShell'
 
 beforeEach(() => {
@@ -15,13 +16,18 @@ beforeEach(() => {
   mock.session = { user: { email: 'adri.martin@example.test' } }
 })
 
-function renderAt(path: string) {
+function NamedDetail() {
+  useProjectCrumb('Arles bedroom')
+  return <PageTitle>Detail page</PageTitle>
+}
+
+function renderAt(path: string, detail = <PageTitle>Detail page</PageTitle>) {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route element={<AppShell />}>
           <Route path="/projects" element={<PageTitle>List page</PageTitle>} />
-          <Route path="/projects/:id" element={<PageTitle>Detail page</PageTitle>} />
+          <Route path="/projects/:id" element={detail} />
         </Route>
       </Routes>
     </MemoryRouter>,
@@ -100,5 +106,12 @@ describe('AppShell', () => {
     mock.session = { user: {} }
     renderAt('/projects')
     expect(screen.getByText('You')).toBeInTheDocument()
+  })
+
+  it('shows the project name in the last crumb once the page supplies it', () => {
+    renderAt('/projects/abc', <NamedDetail />)
+    const crumbs = within(screen.getByRole('navigation', { name: 'Breadcrumb' }))
+    expect(crumbs.getByText('Arles bedroom')).toHaveAttribute('aria-current', 'page')
+    expect(crumbs.queryByText('Project')).not.toBeInTheDocument()
   })
 })
