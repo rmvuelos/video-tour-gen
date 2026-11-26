@@ -40,7 +40,7 @@ const jpg = (name: string) => new File(['x'], name, { type: 'image/jpeg' })
 
 async function setup(files: object[] = []) {
   api.listFiles.mockResolvedValue({ files })
-  const view = render(<Uploader projectId="p1" onSubmitted={vi.fn()} />)
+  const view = render(<Uploader projectId="p1" onSubmitted={vi.fn()} onNotEditable={vi.fn()} />)
   await screen.findByRole('heading', { name: 'Photos' })
   const [planInput, photoInput] =
     view.container.querySelectorAll<HTMLInputElement>('input[type=file]')
@@ -82,7 +82,7 @@ describe('Uploader', () => {
 
   it('offers a retry when the file list does not load', async () => {
     api.listFiles.mockRejectedValueOnce(new Error('x'))
-    render(<Uploader projectId="p1" onSubmitted={vi.fn()} />)
+    render(<Uploader projectId="p1" onSubmitted={vi.fn()} onNotEditable={vi.fn()} />)
     api.listFiles.mockResolvedValue({ files: [] })
     await userEvent.click(await screen.findByRole('button', { name: 'Try again' }))
     expect(await screen.findByRole('heading', { name: 'Photos' })).toBeInTheDocument()
@@ -118,12 +118,12 @@ describe('Uploader', () => {
 
   it('keeps one status region from the start: loading, then the announcements', async () => {
     api.listFiles.mockReturnValue(new Promise(() => undefined))
-    const first = render(<Uploader projectId="p1" onSubmitted={vi.fn()} />)
+    const first = render(<Uploader projectId="p1" onSubmitted={vi.fn()} onNotEditable={vi.fn()} />)
     const status = screen.getByRole('status', { name: 'Upload status' })
     expect(status).toHaveTextContent('Loading files…')
     first.unmount()
     api.listFiles.mockResolvedValue({ files: [] })
-    render(<Uploader projectId="p1" onSubmitted={vi.fn()} />)
+    render(<Uploader projectId="p1" onSubmitted={vi.fn()} onNotEditable={vi.fn()} />)
     const same = screen.getByRole('status', { name: 'Upload status' })
     await screen.findByRole('heading', { name: 'Photos' })
     expect(screen.getByRole('status', { name: 'Upload status' })).toBe(same)
@@ -187,14 +187,19 @@ const ready = () => [
   ...photos(3),
 ]
 const job = { id: 'j1', project_id: 'p1', status: 'queued', created_at: '' }
-const sendButton = () => screen.getByRole('button', { name: 'Continue to preflight' })
+const sendButton = () => screen.getByRole('button', { name: 'Check my files' })
 
-async function setupReady(props: { initial?: object; onSubmitted?: () => void } = {}) {
+async function setupReady(
+  props: { initial?: object; onSubmitted?: () => void; onNotEditable?: () => void } = {},
+) {
   api.listFiles.mockResolvedValue({ files: ready() })
   const onSubmitted = props.onSubmitted ?? vi.fn()
-  render(<Uploader projectId="p1" onSubmitted={onSubmitted} {...props} />)
+  const onNotEditable = props.onNotEditable ?? vi.fn()
+  render(
+    <Uploader projectId="p1" onSubmitted={onSubmitted} onNotEditable={onNotEditable} {...props} />,
+  )
   await screen.findByRole('heading', { name: 'Photos' })
-  return { user: userEvent.setup({ applyAccept: false }), onSubmitted }
+  return { user: userEvent.setup({ applyAccept: false }), onSubmitted, onNotEditable }
 }
 
 describe('Uploader details and submit', () => {
@@ -261,11 +266,14 @@ describe('Uploader details and submit', () => {
     expect(screen.queryByText(/Enter a number above 0/)).not.toBeInTheDocument()
   })
 
-  it('marks the files of a 422 as invalid with their message and focuses the first', async () => {
+  const status = () => screen.getByRole('status', { name: 'Upload status' })
+
+  it('marks the files of a 422 as invalid and focuses the first one in screen order', async () => {
+    // Photos are named p3 first, and p2 is first on screen among them.
     api.submitProject.mockRejectedValue(
       new ApiRequestError(422, 'invalid_files', 'x', [
-        { code: 'missing_object', message: 'm', file_id: 'p2' },
         { code: 'size_mismatch', message: 'm', file_id: 'p3' },
+        { code: 'missing_object', message: 'm', file_id: 'p2' },
       ]),
     )
     const { user } = await setupReady()
@@ -276,23 +284,83 @@ describe('Uploader details and submit', () => {
     ).toBeVisible()
     expect(within(list).getByText(/does not match the chosen one/)).toBeVisible()
     expect(screen.getByRole('alert')).toHaveTextContent('2 files need fixing')
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Remove p2.jpg' })).toHaveFocus())
+    // One announcement only: the alert, not the live region too.
+    expect(status()).not.toHaveTextContent('need fixing')
+    // Focus lands on the error text of the first card, never on Remove (Enter would delete).
+    await waitFor(() => {
+      const active = document.activeElement as HTMLElement
+      expect(active.closest('[data-file-id]')).toHaveAttribute('data-file-id', 'p2')
+      expect(active.tagName).not.toBe('BUTTON')
+      expect(active).toHaveTextContent('The upload did not finish')
+    })
     expect(sendButton()).toHaveAttribute('aria-disabled', 'true')
   })
 
-  it.each([
-    [409, 'files_changed', 'The files changed while sending. Review them and try again.'],
-    [409, 'project_not_editable', "This project was already sent, so its files can't be changed."],
-    [503, 'enqueue_failed', 'We could not start processing. Try again in a moment.'],
-  ])('shows the %i %s error and keeps the form', async (status, code, text) => {
-    api.submitProject.mockRejectedValue(new ApiRequestError(status, code, 'raw'))
+  it('falls back to an alert and a reload when no refused file is on screen', async () => {
+    api.submitProject.mockRejectedValue(
+      new ApiRequestError(422, 'invalid_files', 'x', [
+        { code: 'missing_object', message: 'm', file_id: 'ghost' },
+      ]),
+    )
+    const { user } = await setupReady()
+    await user.click(sendButton())
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Some files are not valid. Fix them and try again.',
+    )
+    await waitFor(() => expect(api.listFiles).toHaveBeenCalledTimes(2))
+  })
+
+  it('shows the 409 files_changed error, reloads the files and keeps the details', async () => {
+    api.submitProject.mockRejectedValue(new ApiRequestError(409, 'files_changed', 'raw'))
+    const { user } = await setupReady()
+    await user.type(screen.getByLabelText('Description'), 'Keep me')
+    await user.click(sendButton())
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The files changed while sending. Review them and try again.',
+    )
+    await waitFor(() => expect(api.listFiles).toHaveBeenCalledTimes(2))
+    expect(await screen.findByLabelText('Description')).toHaveValue('Keep me')
+  })
+
+  it('asks the page to read the project again on 409 project_not_editable', async () => {
+    api.submitProject.mockRejectedValue(new ApiRequestError(409, 'project_not_editable', 'raw'))
+    const { user, onNotEditable } = await setupReady()
+    await user.click(sendButton())
+    expect(await screen.findByRole('alert')).toHaveTextContent('already sent')
+    expect(onNotEditable).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows the 503 enqueue_failed error and keeps the form', async () => {
+    api.submitProject.mockRejectedValue(new ApiRequestError(503, 'enqueue_failed', 'raw'))
     const { user, onSubmitted } = await setupReady()
     await user.type(screen.getByLabelText('Description'), 'Keep me')
     await user.click(sendButton())
-    expect(await screen.findByRole('alert')).toHaveTextContent(text)
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'We could not start processing. Try again in a moment.',
+    )
     expect(screen.getByLabelText('Description')).toHaveValue('Keep me')
     expect(onSubmitted).not.toHaveBeenCalled()
     expect(sendButton()).not.toHaveAttribute('aria-disabled', 'true')
+  })
+
+  it('announces why a blocked press did nothing', async () => {
+    const { user } = await setup(photos(2))
+    await user.click(sendButton())
+    expect(status()).toHaveTextContent('Add the floor plan.')
+    expect(api.submitProject).not.toHaveBeenCalled()
+  })
+
+  it('announces that it is sending', async () => {
+    api.submitProject.mockReturnValue(new Promise(() => undefined))
+    const { user } = await setupReady()
+    await user.click(sendButton())
+    expect(status()).toHaveTextContent('Sending your files…')
+  })
+
+  it('keeps the send button out of the optional details', async () => {
+    await setupReady()
+    const details = screen.getByRole('region', { name: 'Details (optional)' })
+    expect(within(details).queryByRole('button')).not.toBeInTheDocument()
   })
 
   it('summarises the files that need fixing when a project comes back from the ingest', async () => {
@@ -302,8 +370,14 @@ describe('Uploader details and submit', () => {
         serverFile('p3', { status: 'invalid', error_code: 'corrupt_file' }),
       ],
     })
-    render(<Uploader projectId="p1" onSubmitted={vi.fn()} />)
+    render(<Uploader projectId="p1" onSubmitted={vi.fn()} onNotEditable={vi.fn()} />)
     expect(await screen.findByRole('alert')).toHaveTextContent('1 file needs fixing')
     expect(screen.getByText('The file is damaged or unreadable. Choose another one.')).toBeVisible()
+    // The first invalid card takes the focus on its message, not on Remove.
+    await waitFor(() => {
+      const active = document.activeElement as HTMLElement
+      expect(active.closest('[data-file-id]')).toHaveAttribute('data-file-id', 'p3')
+      expect(active.tagName).not.toBe('BUTTON')
+    })
   })
 })

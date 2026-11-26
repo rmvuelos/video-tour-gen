@@ -107,7 +107,7 @@ describe('uploaderReducer', () => {
     )
   })
 
-  it('marks the files the server refused as invalid and announces how many', () => {
+  it('marks the files the server refused as invalid, with their message', () => {
     const before = withItems(item('a', { status: 'pending' }), item('b', { status: 'pending' }))
     const after = reduce(before, {
       type: 'invalidated',
@@ -118,7 +118,8 @@ describe('uploaderReducer', () => {
     })
     expect(after.items[0]?.status).toBe('pending')
     expect(after.items[1]).toMatchObject({ status: 'invalid', error: 'The upload did not finish.' })
-    expect(after.announcement).toBe('1 file needs fixing')
+    // The screen alert says how many need fixing; the live region stays quiet.
+    expect(after.announcement).toBe('')
     expect(before.items[1]?.status).toBe('pending')
   })
 

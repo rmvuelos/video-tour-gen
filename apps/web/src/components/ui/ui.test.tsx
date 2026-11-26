@@ -55,6 +55,20 @@ describe('Button', () => {
     expect(screen.getByRole('button')).not.toHaveFocus()
   })
 
+  it.each(['primary', 'secondary', 'cta'] as const)(
+    'a %s button that is aria-disabled gets no hover style',
+    (variant) => {
+      render(
+        <Button variant={variant} aria-disabled="true">
+          Check
+        </Button>,
+      )
+      // The hover class is only active when the button is not aria-disabled.
+      expect(screen.getByRole('button').className).toContain('not-aria-disabled:hover:')
+      expect(screen.getByRole('button').className).not.toMatch(/(^| )enabled:hover:/)
+    },
+  )
+
   it('points the ref at the button element', () => {
     const ref = createRef<HTMLButtonElement>()
     render(<Button ref={ref}>Browse files</Button>)
