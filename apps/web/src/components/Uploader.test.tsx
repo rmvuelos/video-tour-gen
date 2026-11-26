@@ -105,9 +105,38 @@ describe('Uploader', () => {
     expect(api.registerFiles.mock.calls[0]![1]).toHaveLength(1)
   })
 
-  it('disables a dropzone with no slots left', async () => {
+  it('keeps a full dropzone focusable and says why in text', async () => {
     await setup(photos(10))
-    expect(screen.getByRole('button', { name: 'Choose photos' })).toBeDisabled()
+    const button = screen.getByRole('button', { name: 'Choose photos' })
+    expect(button).toHaveAttribute('aria-disabled', 'true')
+    expect(button).toHaveAccessibleDescription(/You already have 10 photos\. Remove one/)
+    expect(screen.getByText('You already have 10 photos. Remove one to add another.')).toBeVisible()
+  })
+
+  it('keeps one status region from the start: loading, then the announcements', async () => {
+    api.listFiles.mockReturnValue(new Promise(() => undefined))
+    const first = render(<Uploader projectId="p1" />)
+    const status = screen.getByRole('status')
+    expect(status).toHaveTextContent('Loading files…')
+    first.unmount()
+    api.listFiles.mockResolvedValue({ files: [] })
+    render(<Uploader projectId="p1" />)
+    const same = screen.getByRole('status')
+    await screen.findByRole('heading', { name: 'Photos' })
+    expect(screen.getByRole('status')).toBe(same)
+    expect(same).toHaveTextContent('')
+  })
+
+  it('shows a file list only when it has files, with list semantics kept', async () => {
+    await setup([serverFile('a')])
+    expect(screen.getAllByRole('list')).toHaveLength(1)
+    expect(screen.getByRole('list', { name: 'Photo files' })).toHaveAttribute('role', 'list')
+  })
+
+  it('does not repeat the file name in the error of an invalid file', async () => {
+    await setup([serverFile('b', { status: 'invalid', error_code: 'corrupt_file' })])
+    expect(document.body).not.toHaveTextContent(/b\.jpg:\s*b\.jpg/)
+    expect(screen.getByText(/The file is damaged or unreadable/)).toBeInTheDocument()
   })
 
   it('uploads dropped files and announces it in the one status region', async () => {
