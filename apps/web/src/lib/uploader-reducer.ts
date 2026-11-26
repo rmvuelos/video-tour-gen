@@ -1,4 +1,4 @@
-import { remainingSlots, type FileKind, type UploadStatus } from './upload-rules'
+import type { FileKind, UploadStatus } from './upload-rules'
 
 export type UploaderItem = {
   id: string
@@ -20,6 +20,8 @@ export type UploaderState = {
   /** Last add/remove problem, for the screen to show. */
   error: string | null
   items: UploaderItem[]
+  /** Files of each kind whose register request is still in flight (they already use a slot). */
+  registering: Record<FileKind, number>
   /** Text for the single shared role="status" region. */
   announcement: string
 }
@@ -29,6 +31,7 @@ export type UploaderAction =
   | { type: 'loaded'; items: UploaderItem[] }
   | { type: 'loadFailed'; error: string }
   | { type: 'added'; items: UploaderItem[] }
+  | { type: 'registering' | 'registerEnded'; kind: FileKind; count: number }
   | { type: 'progress'; id: string; progress: number }
   | { type: 'done'; id: string }
   | { type: 'failed'; id: string; error: string }
@@ -44,10 +47,17 @@ export const initialState: UploaderState = {
   loadError: null,
   error: null,
   items: [],
+  registering: { plan: 0, photo: 0 },
   announcement: '',
 }
 
-const DONE = new Set<UploadStatus>(['pending', 'uploaded', 'valid'])
+const CANCELLED = 'The upload was cancelled. Retry or remove it.'
+
+/** A live region reads only changes: the same text twice gets a trailing space the 2nd time. */
+const say = (state: UploaderState, text: string): UploaderState => ({
+  ...state,
+  announcement: state.announcement === text ? `${text} ` : text,
+})
 
 const patch = (state: UploaderState, id: string, change: Partial<UploaderItem>) => ({
   ...state,
@@ -75,32 +85,30 @@ export function uploaderReducer(state: UploaderState, action: UploaderAction): U
     case 'failed': {
       const next = patch(state, action.id, { status: 'failed', error: action.error })
       const failed = next.items.find((i) => i.id === action.id)
-      if (!failed) return next
-      const uploaded = next.items.filter((i) => i.kind === failed.kind && DONE.has(i.status))
-      const total = remainingSlots(failed.kind, 0)
-      return {
-        ...next,
-        announcement: `${failed.filename} failed. ${uploaded.length} of ${total} uploaded`,
-      }
+      return failed ? say(next, `${failed.filename} failed to upload. Retry or remove it.`) : next
     }
     case 'removed': {
       const gone = state.items.find((i) => i.id === action.id)
-      return {
-        ...state,
-        error: null,
-        items: state.items.filter((i) => i.id !== action.id),
-        announcement: gone ? `${gone.filename} removed` : state.announcement,
-      }
+      const next = { ...state, error: null, items: state.items.filter((i) => i.id !== action.id) }
+      return gone ? say(next, `${gone.filename} removed`) : next
     }
-    case 'restore':
-      return {
-        ...state,
-        error: action.error,
-        items: state.items.toSpliced(action.index, 0, action.item),
-      }
+    case 'restore': {
+      // An upload we aborted for the delete cannot go on by itself: offer Retry.
+      const item: UploaderItem =
+        action.item.status === 'uploading'
+          ? { ...action.item, status: 'failed', progress: undefined, error: CANCELLED }
+          : action.item
+      return { ...state, error: action.error, items: state.items.toSpliced(action.index, 0, item) }
+    }
+    case 'registering':
+    case 'registerEnded': {
+      const delta = action.type === 'registering' ? action.count : -action.count
+      const count = Math.max(0, state.registering[action.kind] + delta)
+      return { ...state, registering: { ...state.registering, [action.kind]: count } }
+    }
     case 'error':
       return { ...state, error: action.error }
     case 'announce':
-      return { ...state, announcement: action.text }
+      return say(state, action.text)
   }
 }

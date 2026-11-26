@@ -87,7 +87,7 @@ describe('useUploader loading', () => {
     expect(result.current.items.map((i) => i.id)).toEqual(['a', 'b', 'c'])
     expect(result.current.items[1]).toMatchObject({
       status: 'invalid',
-      error: 'b.jpg: The file is damaged or unreadable. Choose another one.',
+      error: 'The file is damaged or unreadable. Choose another one.',
     })
     expect(result.current.items[0]?.file).toBeUndefined()
     expect(result.current.counts).toEqual({ plan: 1, photo: 2 })
