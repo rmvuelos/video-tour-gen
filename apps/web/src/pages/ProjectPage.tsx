@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { useParams } from 'react-router'
 import { Alert } from '../components/ui/Alert'
+import { PageTitle } from '../components/PageTitle'
 import { ApiRequestError } from '../lib/api'
 import { getProject, type Project } from '../lib/projects'
 import { useDocumentTitle } from '../lib/use-document-title'
 
 type State = { project: Project } | { error: string } | null
 
-// shortcut: only the name and a link to the upload step; the uploader (4d) replaces this page.
-export function ProjectPage() {
-  const { id = '' } = useParams()
+// shortcut: only the name; the uploader (4d) replaces this page and adds the way into it.
+function ProjectView({ id }: { id: string }) {
   const [state, setState] = useState<State>(null)
   useDocumentTitle(state && 'project' in state ? state.project.name : 'Project')
 
@@ -36,11 +36,16 @@ export function ProjectPage() {
     )
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-title-lg font-semibold">{state.project.name}</h1>
-      {/* The route behind this link arrives with the uploader (4d). */}
-      <Link to={`/projects/${encodeURIComponent(id)}/upload`} className="font-medium underline">
-        Upload assets
-      </Link>
+      <PageTitle className="text-title-lg font-semibold break-words">
+        {state.project.name}
+      </PageTitle>
+      <p className="text-body text-fg-muted">Uploading assets is coming soon.</p>
     </div>
   )
+}
+
+/** `key` gives every project its own state, so a new id never shows the previous project. */
+export function ProjectPage() {
+  const { id = '' } = useParams()
+  return <ProjectView key={id} id={id} />
 }
