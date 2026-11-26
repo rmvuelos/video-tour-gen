@@ -1,7 +1,10 @@
 import { lazy, Suspense } from 'react'
 import { Route, Routes } from 'react-router'
 import { RequireAuth } from './auth/RequireAuth'
+import { Button } from './components/ui/Button'
 import { useDocumentTitle } from './lib/use-document-title'
+import { getSupabase } from './lib/supabase'
+import { AuthPage } from './pages/AuthPage'
 import { NotFound } from './pages/NotFound'
 
 // The gallery is dev and e2e only. The import sits in the dead branch so production builds
@@ -12,8 +15,11 @@ const UiGallery = galleryEnabled ? lazy(() => import('./dev/UiGallery')) : null
 function Home() {
   useDocumentTitle('Home')
   return (
-    <main className="p-8">
+    <main className="flex items-center justify-between p-8">
       <h1 className="text-title font-semibold">rooma</h1>
+      <Button variant="secondary" onClick={() => void getSupabase().auth.signOut()}>
+        Sign out
+      </Button>
     </main>
   )
 }
@@ -21,8 +27,8 @@ function Home() {
 export function App() {
   return (
     <Routes>
-      {/* shortcut: placeholder so the redirect lands somewhere; feature/web-login replaces it. */}
-      <Route path="/login" element={<h1 className="p-8 text-title font-semibold">Sign in</h1>} />
+      <Route path="/login" element={<AuthPage mode="login" />} />
+      <Route path="/signup" element={<AuthPage mode="signup" />} />
       {UiGallery && (
         <Route
           path="/dev/ui"
