@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router'
 import { useSession } from '../auth/session'
 import { Avatar } from '../components/ui/Avatar'
 import { Breadcrumb } from '../components/ui/Breadcrumb'
 import { Sidebar } from '../components/ui/Sidebar'
 import { getSupabase } from '../lib/supabase'
+import type { ProjectCrumb } from '../lib/use-project-crumb'
 
 // shortcut: the uploader lives at /projects/:id, but the sidebar has no current project; it points at the list.
 const HREFS = { upload: '/projects', projects: '/projects' }
@@ -26,7 +27,11 @@ export function AppShell() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const user = userLabel(session?.user.email)
-  const [projectName, setProjectName] = useState<string>()
+  const [crumb, setCrumb] = useState<ProjectCrumb>()
+  // Stable, so the page's effect does not run again on every shell render.
+  const outletContext = useMemo(() => ({ setCrumb }), [])
+  // A name for another route (the previous project, one frame late) is ignored.
+  const projectName = crumb?.path === pathname ? crumb.name : undefined
 
   return (
     <div className="flex min-h-screen bg-canvas text-fg">
@@ -64,7 +69,7 @@ export function AppShell() {
         </header>
         <main className="flex-1 py-10">
           {/* key: a new route remounts the page, so its heading takes focus again */}
-          <Outlet key={pathname} context={{ setProjectName }} />
+          <Outlet key={pathname} context={outletContext} />
         </main>
       </div>
     </div>

@@ -1,14 +1,19 @@
 import { useEffect } from 'react'
-import { useOutletContext } from 'react-router'
+import { useLocation, useOutletContext } from 'react-router'
 
-type ShellContext = { setProjectName: (name: string | undefined) => void }
+export type ProjectCrumb = { path: string; name: string }
+type ShellContext = { setCrumb: (crumb: ProjectCrumb | undefined) => void }
 
-/** Gives the shell the project name for the last breadcrumb; outside the shell it does nothing. */
+/**
+ * Gives the shell the project name for the last breadcrumb; outside the shell it does nothing.
+ * The name travels with its path, so the shell can ignore it for any other route.
+ */
 export function useProjectCrumb(name: string | undefined) {
   const shell = useOutletContext<ShellContext | undefined>()
-  const set = shell?.setProjectName
+  const { pathname } = useLocation()
+  const setCrumb = shell?.setCrumb
   useEffect(() => {
-    set?.(name)
-    return () => set?.(undefined)
-  }, [set, name])
+    setCrumb?.(name === undefined ? undefined : { path: pathname, name })
+    return () => setCrumb?.(undefined)
+  }, [setCrumb, pathname, name])
 }
