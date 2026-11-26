@@ -52,7 +52,7 @@ export function ProjectOverview({ name, progress }: { name: string; progress: Pr
           <Eyebrow>Project overview</Eyebrow>
           <p className="text-title-lg font-semibold break-words">{name}</p>
         </div>
-        <div className="mt-2 flex flex-col gap-2">
+        <div className="flex flex-col gap-1">
           <img
             src={illustration}
             alt=""
