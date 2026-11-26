@@ -34,6 +34,14 @@ describe('IngestStatus', () => {
     await tick(0)
     expect(live()).toHaveTextContent('Waiting to start…')
     expect(screen.getByRole('progressbar')).not.toHaveAttribute('aria-valuenow')
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuetext', 'Waiting to start')
+  })
+
+  it('focuses its heading when it appears, never the progress bar', async () => {
+    api.getLatestJob.mockResolvedValue(job('running'))
+    render(<IngestStatus projectId="p1" onSettled={vi.fn()} />)
+    await tick(0)
+    expect(screen.getByRole('heading', { level: 2, name: 'Checking your files' })).toHaveFocus()
   })
 
   it('shows files checked so far as text and as the bar value', async () => {
@@ -50,6 +58,10 @@ describe('IngestStatus', () => {
     render(<IngestStatus projectId="p1" onSettled={vi.fn()} />)
     await tick(0)
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '50')
+    expect(screen.getByRole('progressbar')).toHaveAttribute(
+      'aria-valuetext',
+      '2 of 4 files checked',
+    )
     expect(screen.getByText('2 of 4 files checked')).toBeInTheDocument()
   })
 
@@ -90,11 +102,27 @@ describe('IngestStatus', () => {
     render(<IngestStatus projectId="p1" onSettled={vi.fn()} />)
     await tick(0)
     expect(screen.getByRole('alert')).toHaveTextContent('Processing was interrupted. Try again.')
+    // The alert speaks: the shared status stays empty so nothing is announced twice.
+    expect(live()).toBeEmptyDOMElement()
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Try again' })))
     expect(api.retryIngest).toHaveBeenCalledWith('p1', expect.any(AbortSignal))
     await tick(0)
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(live()).toHaveTextContent('Checking your files…')
+    expect(screen.getByRole('heading', { name: 'Checking your files' })).toHaveFocus()
+  })
+
+  it('says Retrying and blocks a second press while the retry is pending', async () => {
+    api.getLatestJob.mockResolvedValue(job('failed', { error_code: 'worker_lost' }))
+    api.retryIngest.mockReturnValue(new Promise(() => undefined))
+    render(<IngestStatus projectId="p1" onSettled={vi.fn()} />)
+    await tick(0)
+    const button = screen.getByRole('button', { name: 'Try again' })
+    await act(async () => fireEvent.click(button))
+    await act(async () => fireEvent.click(button))
+    expect(api.retryIngest).toHaveBeenCalledTimes(1)
+    expect(button).toHaveAttribute('aria-disabled', 'true')
+    expect(live()).toHaveTextContent('Retrying…')
   })
 
   it('shows a retry error and keeps the button', async () => {
@@ -115,8 +143,8 @@ describe('IngestStatus', () => {
     render(<IngestStatus projectId="p1" onSettled={vi.fn()} />)
     await tick(0)
     await tick(4000)
-    expect(screen.getByText(/Can't check the progress right now/)).toBeInTheDocument()
+    expect(live()).toHaveTextContent(/Can't check the progress right now/)
     await tick(8000)
-    expect(screen.queryByText(/Can't check the progress right now/)).not.toBeInTheDocument()
+    expect(live()).not.toHaveTextContent(/Can't check the progress right now/)
   })
 })
