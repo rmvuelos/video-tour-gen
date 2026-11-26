@@ -3,7 +3,7 @@
   "workspaces": {
     ".": { "entry": ["scripts/*.mjs"] },
     "apps/web": {
-      "entry": ["e2e/*.spec.ts", "src/lib/{uploads,put-upload,upload-rules}.ts"],
+      "entry": ["e2e/*.spec.ts"],
     },
   },
 }
