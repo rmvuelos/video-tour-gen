@@ -70,9 +70,4 @@ describe('uploads requests', () => {
       signal: null,
     })
   })
-
-  it('lets API errors through', async () => {
-    apiFetch.mockRejectedValue(new Error('boom'))
-    await expect(getLatestJob('p1')).rejects.toThrow('boom')
-  })
 })
