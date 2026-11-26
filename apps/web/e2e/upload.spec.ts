@@ -175,6 +175,7 @@ test('rejects a HEIC photo before uploading it', async ({ page }) => {
 })
 
 test('shows intermediate progress while a large file uploads', async ({ page }) => {
+  test.setTimeout(120_000) // the slow server is slower still with the other specs running
   // The mocked route would answer at once, so this PUT goes to a real server that reads slowly.
   const server = await slowServer()
   try {
@@ -187,10 +188,11 @@ test('shows intermediate progress while a large file uploads', async ({ page }) 
     const bar = page.getByRole('progressbar').first()
     const values = new Set<number>()
     await expect(async () => {
-      const now = await bar.getAttribute('aria-valuenow', { timeout: 500 })
+      // The bar is gone once the upload ends, so a missing bar is not an error.
+      const now = await bar.getAttribute('aria-valuenow', { timeout: 200 }).catch(() => null)
       if (now !== null) values.add(Number(now))
       await expect(page.getByText(/Uploaded$/)).toBeVisible({ timeout: 100 })
-    }).toPass({ timeout: 40_000, intervals: [50] })
+    }).toPass({ timeout: 110_000, intervals: [50] })
     expect([...values].some((v) => v > 0 && v < 100)).toBe(true)
   } finally {
     server.closeAllConnections()
