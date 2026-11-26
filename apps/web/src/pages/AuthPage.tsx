@@ -154,11 +154,7 @@ export function AuthPage({ mode }: { mode: keyof typeof MODES }) {
               />
             )}
           </Field>
-          <Button
-            type="submit"
-            aria-disabled={pending}
-            className="self-start aria-disabled:cursor-not-allowed aria-disabled:opacity-(--opacity-disabled)"
-          >
+          <Button type="submit" aria-disabled={pending} className="self-start">
             {pending ? copy.pending : copy.title}
           </Button>
         </form>

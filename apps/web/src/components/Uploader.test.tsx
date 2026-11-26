@@ -40,7 +40,14 @@ const jpg = (name: string) => new File(['x'], name, { type: 'image/jpeg' })
 
 async function setup(files: object[] = []) {
   api.listFiles.mockResolvedValue({ files })
-  const view = render(<Uploader projectId="p1" onSubmitted={vi.fn()} onNotEditable={vi.fn()} />)
+  const view = render(
+    <Uploader
+      projectId="p1"
+      projectName="Arles bedroom"
+      onSubmitted={vi.fn()}
+      onNotEditable={vi.fn()}
+    />,
+  )
   await screen.findByRole('heading', { name: 'Photos' })
   const [planInput, photoInput] =
     view.container.querySelectorAll<HTMLInputElement>('input[type=file]')
@@ -82,7 +89,14 @@ describe('Uploader', () => {
 
   it('offers a retry when the file list does not load', async () => {
     api.listFiles.mockRejectedValueOnce(new Error('x'))
-    render(<Uploader projectId="p1" onSubmitted={vi.fn()} onNotEditable={vi.fn()} />)
+    render(
+      <Uploader
+        projectId="p1"
+        projectName="Arles bedroom"
+        onSubmitted={vi.fn()}
+        onNotEditable={vi.fn()}
+      />,
+    )
     api.listFiles.mockResolvedValue({ files: [] })
     await userEvent.click(await screen.findByRole('button', { name: 'Try again' }))
     expect(await screen.findByRole('heading', { name: 'Photos' })).toBeInTheDocument()
@@ -118,12 +132,26 @@ describe('Uploader', () => {
 
   it('keeps one status region from the start: loading, then the announcements', async () => {
     api.listFiles.mockReturnValue(new Promise(() => undefined))
-    const first = render(<Uploader projectId="p1" onSubmitted={vi.fn()} onNotEditable={vi.fn()} />)
+    const first = render(
+      <Uploader
+        projectId="p1"
+        projectName="Arles bedroom"
+        onSubmitted={vi.fn()}
+        onNotEditable={vi.fn()}
+      />,
+    )
     const status = screen.getByRole('status', { name: 'Upload status' })
     expect(status).toHaveTextContent('Loading files…')
     first.unmount()
     api.listFiles.mockResolvedValue({ files: [] })
-    render(<Uploader projectId="p1" onSubmitted={vi.fn()} onNotEditable={vi.fn()} />)
+    render(
+      <Uploader
+        projectId="p1"
+        projectName="Arles bedroom"
+        onSubmitted={vi.fn()}
+        onNotEditable={vi.fn()}
+      />,
+    )
     const same = screen.getByRole('status', { name: 'Upload status' })
     await screen.findByRole('heading', { name: 'Photos' })
     expect(screen.getByRole('status', { name: 'Upload status' })).toBe(same)
@@ -132,7 +160,7 @@ describe('Uploader', () => {
 
   it('shows a file list only when it has files, with list semantics kept', async () => {
     await setup([serverFile('a')])
-    expect(screen.getAllByRole('list')).toHaveLength(1)
+    expect(screen.queryByRole('list', { name: 'Floor plan files' })).not.toBeInTheDocument()
     expect(screen.getByRole('list', { name: 'Photo files' })).toHaveAttribute('role', 'list')
   })
 
@@ -188,6 +216,7 @@ const ready = () => [
 ]
 const job = { id: 'j1', project_id: 'p1', status: 'queued', created_at: '' }
 const sendButton = () => screen.getByRole('button', { name: 'Check my files' })
+const detailsToggle = () => screen.getByRole('button', { name: 'Add description' })
 
 async function setupReady(
   props: { initial?: object; onSubmitted?: () => void; onNotEditable?: () => void } = {},
@@ -196,7 +225,13 @@ async function setupReady(
   const onSubmitted = props.onSubmitted ?? vi.fn()
   const onNotEditable = props.onNotEditable ?? vi.fn()
   render(
-    <Uploader projectId="p1" onSubmitted={onSubmitted} onNotEditable={onNotEditable} {...props} />,
+    <Uploader
+      projectId="p1"
+      projectName="Arles bedroom"
+      onSubmitted={onSubmitted}
+      onNotEditable={onNotEditable}
+      {...props}
+    />,
   )
   await screen.findByRole('heading', { name: 'Photos' })
   return { user: userEvent.setup({ applyAccept: false }), onSubmitted, onNotEditable }
@@ -228,6 +263,7 @@ describe('Uploader details and submit', () => {
   it('sends page 0, the area and the description once, even on a double click', async () => {
     api.submitProject.mockResolvedValue(job)
     const { user, onSubmitted } = await setupReady()
+    await user.click(detailsToggle())
     await user.type(screen.getByLabelText('Area (m²)'), '85,5')
     await user.type(screen.getByLabelText('Description'), 'Sunny')
     await user.dblClick(sendButton())
@@ -254,6 +290,7 @@ describe('Uploader details and submit', () => {
 
   it('shows an inline area error, focuses the field and does not send', async () => {
     const { user } = await setupReady()
+    await user.click(detailsToggle())
     const area = screen.getByLabelText('Area (m²)')
     await user.type(area, '-4')
     await user.click(sendButton())
@@ -313,6 +350,7 @@ describe('Uploader details and submit', () => {
   it('shows the 409 files_changed error, reloads the files and keeps the details', async () => {
     api.submitProject.mockRejectedValue(new ApiRequestError(409, 'files_changed', 'raw'))
     const { user } = await setupReady()
+    await user.click(detailsToggle())
     await user.type(screen.getByLabelText('Description'), 'Keep me')
     await user.click(sendButton())
     expect(await screen.findByRole('alert')).toHaveTextContent(
@@ -333,6 +371,7 @@ describe('Uploader details and submit', () => {
   it('shows the 503 enqueue_failed error and keeps the form', async () => {
     api.submitProject.mockRejectedValue(new ApiRequestError(503, 'enqueue_failed', 'raw'))
     const { user, onSubmitted } = await setupReady()
+    await user.click(detailsToggle())
     await user.type(screen.getByLabelText('Description'), 'Keep me')
     await user.click(sendButton())
     expect(await screen.findByRole('alert')).toHaveTextContent(
@@ -357,12 +396,6 @@ describe('Uploader details and submit', () => {
     expect(status()).toHaveTextContent('Sending your files…')
   })
 
-  it('keeps the send button out of the optional details', async () => {
-    await setupReady()
-    const details = screen.getByRole('region', { name: 'Details (optional)' })
-    expect(within(details).queryByRole('button')).not.toBeInTheDocument()
-  })
-
   it('summarises the files that need fixing when a project comes back from the ingest', async () => {
     api.listFiles.mockResolvedValue({
       files: [
@@ -370,7 +403,14 @@ describe('Uploader details and submit', () => {
         serverFile('p3', { status: 'invalid', error_code: 'corrupt_file' }),
       ],
     })
-    render(<Uploader projectId="p1" onSubmitted={vi.fn()} onNotEditable={vi.fn()} />)
+    render(
+      <Uploader
+        projectId="p1"
+        projectName="Arles bedroom"
+        onSubmitted={vi.fn()}
+        onNotEditable={vi.fn()}
+      />,
+    )
     expect(await screen.findByRole('alert')).toHaveTextContent('1 file needs fixing')
     expect(screen.getByText('The file is damaged or unreadable. Choose another one.')).toBeVisible()
     // The first invalid card takes the focus on its message, not on Remove.
@@ -379,5 +419,76 @@ describe('Uploader details and submit', () => {
       expect(active.closest('[data-file-id]')).toHaveAttribute('data-file-id', 'p3')
       expect(active.tagName).not.toBe('BUTTON')
     })
+  })
+})
+
+describe('Uploader layout', () => {
+  it('collapses the optional details behind a button wired with aria-expanded and aria-controls', async () => {
+    const { user } = await setupReady()
+    const toggle = detailsToggle()
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    const panel = document.getElementById(toggle.getAttribute('aria-controls')!)!
+    expect(panel).toBeInTheDocument()
+    expect(screen.getByLabelText('Area (m²)')).not.toBeVisible()
+    expect(screen.getByRole('heading', { name: 'Add optional project details' })).toBeVisible()
+
+    await user.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByLabelText('Area (m²)')).toBeVisible()
+
+    await user.type(screen.getByLabelText('Description'), 'Keep me')
+    await user.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.getByLabelText('Description')).not.toBeVisible()
+    await user.click(toggle)
+    expect(screen.getByLabelText('Description')).toHaveValue('Keep me')
+  })
+
+  it('starts expanded when the project already has details', async () => {
+    await setupReady({ initial: { area_m2: 40, description: null } })
+    expect(detailsToggle()).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByLabelText('Area (m²)')).toBeVisible()
+  })
+
+  it('expands the details to show an area error the send attempt found', async () => {
+    const { user } = await setupReady()
+    await user.click(detailsToggle())
+    const area = screen.getByLabelText('Area (m²)')
+    await user.type(area, '-4')
+    await user.click(detailsToggle())
+    expect(area).not.toBeVisible()
+    await user.click(sendButton())
+    expect(detailsToggle()).toHaveAttribute('aria-expanded', 'true')
+    await waitFor(() => expect(area).toHaveFocus())
+    expect(area).toBeVisible()
+    expect(screen.getByText(/Enter a number above 0/)).toBeVisible()
+    expect(api.submitProject).not.toHaveBeenCalled()
+  })
+
+  it('counts the required sources that are in', async () => {
+    const { user, planInput, photoInput } = await setup()
+    expect(screen.getByText('0 of 2 required sources')).toBeInTheDocument()
+    await user.upload(planInput, new File(['x'], 'plan.png', { type: 'image/png' }))
+    expect(await screen.findByText('1 of 2 required sources')).toBeInTheDocument()
+    await user.upload(photoInput, [jpg('a.jpg'), jpg('b.jpg'), jpg('c.jpg')])
+    expect(await screen.findByText('2 of 2 required sources')).toBeInTheDocument()
+  })
+
+  it('shows the project name and the real counts in the overview', async () => {
+    await setupReady()
+    const card = screen.getByRole('complementary', { name: 'Project overview' })
+    expect(within(card).getByText('Arles bedroom')).toBeInTheDocument()
+    expect(within(card).getByText('3 of 10')).toBeInTheDocument()
+  })
+
+  it('puts the secure uploads note and the send button in the bottom bar', async () => {
+    await setupReady()
+    expect(screen.getByText(/Secure uploads/)).toHaveTextContent(
+      'Secure uploads · PDF, PNG, JPG and WebP accepted',
+    )
+    const bar = screen.getByText(/Secure uploads/).parentElement!
+    expect(bar).toContainElement(sendButton())
+    expect(bar).toContainElement(screen.getByText('All files are uploaded.'))
+    expect(bar).not.toContainElement(detailsToggle())
   })
 })

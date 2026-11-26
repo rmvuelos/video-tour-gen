@@ -86,7 +86,8 @@
   --color-action: var(--color-ink);
   --color-action-hover: color-mix(in srgb, var(--color-ink) 85%, var(--color-white));
   --color-focus: var(--color-ink);
-  --opacity-disabled: 0.5;
+  /* A percentage: it serves `opacity` and the color-mix of dimmed (aria-disabled) buttons. */
+  --opacity-disabled: 50%;
 
   /* Type scale (rem at a 16px root); every line height is 130% and tracking 0 in Figma. */
   --text-eyebrow: 0.75rem;
@@ -172,6 +173,17 @@
   --spacing-avatar-sm: 2.75rem;
   --spacing-brand-mark: 47px;
   --spacing-plan-card: 110px;
+  --spacing-summary: 449px;
+  --spacing-hero: 38px;
+  --spacing-section: 45px;
+  --spacing-stack: 29px;
+  --spacing-spec-card: 133px;
+  /* Content width from which the summary sits beside the dropzones: two dropzones of at least
+     25rem, the summary and the gap. */
+  --container-summary: 81rem;
+  /* Width of the dropzone column from which the two dropzones sit side by side. */
+  --container-dropzones: 51rem;
+  --spacing-illustration: 395px;
 }
 
 @keyframes indeterminate {

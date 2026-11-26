@@ -127,3 +127,20 @@ describe('Avatar', () => {
     expect(screen.getByTestId('me')).toHaveClass('ml-2')
   })
 })
+
+describe('Button aria-disabled', () => {
+  it.each(['primary', 'secondary', 'cta'] as const)(
+    'a %s button dims its colors, not the whole element, so the focus ring stays at full strength',
+    (variant) => {
+      render(
+        <Button variant={variant} aria-disabled="true">
+          Go
+        </Button>,
+      )
+      const { className } = screen.getByRole('button')
+      expect(className).not.toMatch(/aria-disabled:opacity/)
+      expect(className).toContain('aria-disabled:bg-')
+      expect(className).toContain('aria-disabled:text-')
+    },
+  )
+})

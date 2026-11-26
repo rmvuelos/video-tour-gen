@@ -1,9 +1,11 @@
+import { useMemo, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router'
 import { useSession } from '../auth/session'
 import { Avatar } from '../components/ui/Avatar'
 import { Breadcrumb } from '../components/ui/Breadcrumb'
 import { Sidebar } from '../components/ui/Sidebar'
 import { getSupabase } from '../lib/supabase'
+import type { ProjectCrumb } from '../lib/use-project-crumb'
 
 // shortcut: the uploader lives at /projects/:id, but the sidebar has no current project; it points at the list.
 const HREFS = { upload: '/projects', projects: '/projects' }
@@ -13,10 +15,10 @@ function userLabel(email: string | undefined) {
   return { name, initials: name.slice(0, 2).toUpperCase() }
 }
 
-// shortcut: crumbs come from the path; show the project name instead of "Project" when the page can supply it.
-function crumbsFor(pathname: string) {
+// crumbs come from the path; a project page supplies its name (useProjectCrumb), "Project" until then.
+function crumbsFor(pathname: string, projectName: string | undefined) {
   const root = [{ label: 'Workspace' }, { label: 'Projects', href: '/projects' }]
-  return pathname.startsWith('/projects/') ? [...root, { label: 'Project' }] : root
+  return pathname.startsWith('/projects/') ? [...root, { label: projectName ?? 'Project' }] : root
 }
 
 /** Authenticated layout: sidebar and header around the routed page. */
@@ -25,6 +27,11 @@ export function AppShell() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const user = userLabel(session?.user.email)
+  const [crumb, setCrumb] = useState<ProjectCrumb>()
+  // Stable, so the page's effect does not run again on every shell render.
+  const outletContext = useMemo(() => ({ setCrumb }), [])
+  // A name for another route (the previous project, one frame late) is ignored.
+  const projectName = crumb?.path === pathname ? crumb.name : undefined
 
   return (
     <div className="flex min-h-screen bg-canvas text-fg">
@@ -48,7 +55,7 @@ export function AppShell() {
       />
       <div className="flex min-w-0 flex-1 flex-col pr-10 pl-gutter">
         <header className="flex h-25 shrink-0 items-center justify-between gap-6 border-b border-line">
-          <Breadcrumb items={crumbsFor(pathname)} className="min-w-0" />
+          <Breadcrumb items={crumbsFor(pathname, projectName)} className="min-w-0" />
           <div className="flex items-center gap-6">
             <button
               type="button"
@@ -62,7 +69,7 @@ export function AppShell() {
         </header>
         <main className="flex-1 py-10">
           {/* key: a new route remounts the page, so its heading takes focus again */}
-          <Outlet key={pathname} />
+          <Outlet key={pathname} context={outletContext} />
         </main>
       </div>
     </div>

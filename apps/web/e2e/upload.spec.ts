@@ -1,6 +1,6 @@
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 
 // Same approach as projects.spec.ts: the API, Supabase auth and the signed-URL storage PUT are
 // mocked in the browser (the e2e job runs neither), against the production build.
@@ -41,10 +41,15 @@ type Options = {
   outcome?: 'ready' | 'needs_fix'
   /** Where the signed URLs point; the default is a path on the mocked Supabase origin. */
   uploadBase?: string
+  /** The project name (the upload screen shows it in the overview card). */
+  name?: string
 }
 
 /** A tiny stateful backend: the files registered, the project status and the ingest job. */
-async function mockBackend(page: Page, { outcome = 'ready', uploadBase }: Options = {}) {
+async function mockBackend(
+  page: Page,
+  { outcome = 'ready', uploadBase, name = 'Arles bedroom' }: Options = {},
+) {
   await page.addInitScript(
     ([key, session]) => localStorage.setItem(key as string, JSON.stringify(session)),
     [SESSION_KEY, SESSION],
@@ -54,7 +59,7 @@ async function mockBackend(page: Page, { outcome = 'ready', uploadBase }: Option
   let status = 'draft'
   const project = () => ({
     id: 'p1',
-    name: 'Arles bedroom',
+    name,
     status,
     area_m2: null,
     description: null,
@@ -151,6 +156,10 @@ test('uploads a plan and photos, sends the details and follows the ingest to rea
   await addAll(page)
   await expect(send(page)).not.toHaveAttribute('aria-disabled', 'true')
 
+  const toggle = page.getByRole('button', { name: 'Add description' })
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true')
   await page.getByLabel('Area (m²)').fill('85,5')
   await page.getByLabel('Description').fill('Sunny corner flat')
   if (shotsDir) await page.screenshot({ path: `${shotsDir}/uploader-4d.png` })
@@ -166,6 +175,79 @@ test('uploads a plan and photos, sends the details and follows the ingest to rea
     area_m2: 85.5,
     description: 'Sunny corner flat',
   })
+})
+
+/** The empty upload screen at a size, settled: fonts loaded, nothing hovered or focused. */
+async function openEmpty(page: Page, width: number, height: number) {
+  await page.setViewportSize({ width, height })
+  await mockBackend(page, { name: 'The Arles bedroom' })
+  await page.goto('/projects/p1')
+  await expect(page.getByText('0 of 2 required sources')).toBeVisible()
+  await page.evaluate(() => document.fonts.ready)
+  await page.mouse.move(0, 0)
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+}
+
+const box = async (locator: Locator) => (await locator.boundingBox())!
+const zone = (page: Page, name: string) => page.getByRole('group', { name })
+
+test('the empty upload screen keeps its look at 1920x1080', async ({ page }) => {
+  // Text antialiasing differs per OS: the baseline is the Windows one, so Linux CI skips it.
+  test.skip(process.platform !== 'win32', 'the visual baseline is rendered on Windows')
+  await openEmpty(page, 1920, 1080)
+  await expect(page).toHaveScreenshot('upload-empty.png', {
+    animations: 'disabled',
+    maxDiffPixelRatio: 0.002,
+  })
+})
+
+test('captures the upload screen for design review', async ({ page }) => {
+  test.skip(!shotsDir, 'only with DESIGN_SHOTS_DIR')
+  await openEmpty(page, 1920, 1080)
+  await page.screenshot({ path: `${shotsDir}/uploader-maqueta.png` })
+  await openEmpty(page, 1280, 800)
+  await page.screenshot({ path: `${shotsDir}/uploader-maqueta-1280.png` })
+})
+
+test('lays the screen out as designed at 1920x1080, on every OS', async ({ page }) => {
+  await openEmpty(page, 1920, 1080)
+  const [plan, photos] = [await box(zone(page, 'Floor plan')), await box(zone(page, 'Photos'))]
+  const overview = await box(page.getByRole('complementary', { name: 'Project overview' }))
+  expect(Math.abs(plan.y - photos.y)).toBeLessThan(1)
+  expect(photos.x).toBeGreaterThan(plan.x + plan.width)
+  expect(overview.x).toBeGreaterThanOrEqual(photos.x + photos.width)
+  expect(overview.width).toBeGreaterThan(400)
+
+  const note = await box(page.getByText(/Secure uploads/))
+  const cta = await box(send(page))
+  expect(cta.x).toBeGreaterThan(note.x + note.width)
+  expect(Math.abs(note.y + note.height / 2 - (cta.y + cta.height / 2))).toBeLessThan(cta.height / 2)
+  expect(cta.x + cta.width).toBeGreaterThan(overview.x + overview.width / 2)
+  expect(cta.y).toBeGreaterThan(overview.y + overview.height)
+
+  // The collapsed details are really hidden: "hidden" wins over the panel's flex.
+  const display = await page
+    .getByLabel('Area (m²)')
+    .evaluate((el) => getComputedStyle(el.closest('[hidden]')!).display)
+  expect(display).toBe('none')
+})
+
+test('stacks the dropzones and keeps them wide at 1024 px', async ({ page }) => {
+  await openEmpty(page, 1024, 768)
+  const [plan, photos] = [await box(zone(page, 'Floor plan')), await box(zone(page, 'Photos'))]
+  expect(plan.width).toBeGreaterThan(400)
+  expect(photos.width).toBeGreaterThan(400)
+  expect(photos.y).toBeGreaterThan(plan.y + plan.height - 1)
+})
+
+test('puts the dropzones side by side, summary below, at 1280 px', async ({ page }) => {
+  await openEmpty(page, 1280, 800)
+  const [plan, photos] = [await box(zone(page, 'Floor plan')), await box(zone(page, 'Photos'))]
+  const overview = await box(page.getByRole('complementary', { name: 'Project overview' }))
+  expect(Math.abs(plan.y - photos.y)).toBeLessThan(1)
+  expect(plan.width).toBeGreaterThan(400)
+  expect(photos.width).toBeGreaterThan(400)
+  expect(overview.y).toBeGreaterThan(plan.y + plan.height)
 })
 
 test('rejects a HEIC photo before uploading it', async ({ page }) => {

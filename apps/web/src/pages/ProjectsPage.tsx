@@ -144,11 +144,7 @@ function CreateProject() {
             />
           )}
         </Field>
-        <Button
-          type="submit"
-          aria-disabled={pending}
-          className="self-start aria-disabled:cursor-not-allowed aria-disabled:opacity-(--opacity-disabled)"
-        >
+        <Button type="submit" aria-disabled={pending} className="self-start">
           {pending ? 'Creating…' : 'Create project'}
         </Button>
       </form>
@@ -231,7 +227,7 @@ export function ProjectsPage() {
             variant="secondary"
             aria-disabled={loading}
             onClick={() => !loading && loadMore()}
-            className="self-start aria-disabled:cursor-not-allowed aria-disabled:opacity-(--opacity-disabled)"
+            className="self-start"
           >
             Load more
           </Button>
