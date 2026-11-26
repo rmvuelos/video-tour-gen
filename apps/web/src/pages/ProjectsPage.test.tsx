@@ -36,6 +36,11 @@ const project = (n: number, status = 'draft') => ({
 const page = (items: object[], offset = 0) => ({ items, limit: PAGE_SIZE, offset })
 const many = (from: number, count: number) =>
   Array.from({ length: count }, (_, i) => project(from + i))
+const deferred = () => {
+  let resolve!: (value: object) => void
+  const promise = new Promise<object>((r) => (resolve = r))
+  return { promise, resolve }
+}
 
 beforeEach(() => mock.apiFetch.mockReset())
 
@@ -97,14 +102,20 @@ describe('ProjectsPage list', () => {
     expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument()
   })
 
-  it('keeps the loaded projects when loading more fails', async () => {
+  it('keeps the loaded projects when loading more fails, with one way to retry', async () => {
     mock.apiFetch
       .mockResolvedValueOnce(page(many(1, PAGE_SIZE)))
       .mockRejectedValueOnce(new ApiRequestError(500, 'internal_error', 'Server error.'))
+      .mockResolvedValueOnce(page(many(PAGE_SIZE + 1, 1), PAGE_SIZE))
     renderPage()
     await userEvent.click(await screen.findByRole('button', { name: 'Load more' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Server error.')
     expect(screen.getByRole('link', { name: 'Project 1' })).toBeVisible()
+    // One control for the same action: Try again replaces Load more while it failed.
+    expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(await screen.findByRole('link', { name: `Project ${PAGE_SIZE + 1}` })).toBeVisible()
+    expect(mock.apiFetch.mock.calls[2]?.[0]).toContain(`offset=${PAGE_SIZE}`)
   })
 
   it('cancels the request when the page unmounts', () => {
@@ -124,6 +135,51 @@ describe('ProjectsPage list', () => {
     })
     renderPage()
     expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
+  })
+})
+
+describe('ProjectsPage accessibility', () => {
+  it('announces progress in one persistent region and focuses the first new project', async () => {
+    const next = deferred()
+    mock.apiFetch.mockResolvedValueOnce(page(many(1, PAGE_SIZE))).mockReturnValueOnce(next.promise)
+    renderPage()
+    const button = await screen.findByRole('button', { name: 'Load more' })
+    const region = screen.getByRole('status')
+    await userEvent.click(button)
+    expect(region).toHaveTextContent('Loading more…')
+    expect(button).toHaveAttribute('aria-disabled', 'true')
+    await userEvent.click(button)
+    expect(mock.apiFetch).toHaveBeenCalledTimes(2)
+    next.resolve(page(many(PAGE_SIZE + 1, 3), PAGE_SIZE))
+    expect(await screen.findByRole('link', { name: `Project ${PAGE_SIZE + 1}` })).toHaveFocus()
+    expect(screen.getByRole('status')).toBe(region)
+    expect(region).toHaveTextContent('3 more projects loaded')
+  })
+
+  it('shows a project once and continues after the offset the API answered', async () => {
+    mock.apiFetch
+      .mockResolvedValueOnce(page(many(1, PAGE_SIZE)))
+      .mockResolvedValueOnce(page(many(PAGE_SIZE, PAGE_SIZE), PAGE_SIZE))
+      .mockResolvedValueOnce(page([], PAGE_SIZE * 2))
+    renderPage()
+    await userEvent.click(await screen.findByRole('button', { name: 'Load more' }))
+    await screen.findByRole('link', { name: `Project ${PAGE_SIZE * 2 - 1}` })
+    expect(screen.getAllByRole('link', { name: `Project ${PAGE_SIZE}` })).toHaveLength(1)
+    await userEvent.click(screen.getByRole('button', { name: 'Load more' }))
+    expect(mock.apiFetch.mock.calls[2]?.[0]).toContain(`offset=${PAGE_SIZE * 2}`)
+  })
+
+  it('moves focus to the error when the first load fails', async () => {
+    mock.apiFetch.mockRejectedValueOnce(new ApiRequestError(500, 'internal_error', 'Server error.'))
+    renderPage()
+    expect(await screen.findByRole('alert')).toHaveFocus()
+  })
+
+  it('keeps a long project name readable in the title', async () => {
+    const name = 'A very long project name '.repeat(8)
+    mock.apiFetch.mockResolvedValueOnce(page([{ ...project(1), name }]))
+    renderPage()
+    expect(await screen.findByRole('link', { name })).toHaveAttribute('title', name)
   })
 })
 
@@ -150,7 +206,15 @@ describe('ProjectsPage create', () => {
     expect(mock.apiFetch).toHaveBeenCalledTimes(1)
   })
 
-  it('shows the message of an API failure', async () => {
+  it('limits the name to 120 characters and focuses the field when it is invalid', async () => {
+    renderPage()
+    const input = await screen.findByLabelText(/Project name/)
+    expect(input).toHaveAttribute('maxlength', '120')
+    await userEvent.click(screen.getByRole('button', { name: 'Create project' }))
+    expect(input).toHaveFocus()
+  })
+
+  it('shows the message of an API failure and focuses it', async () => {
     mock.apiFetch.mockRejectedValueOnce(
       new ApiRequestError(429, 'rate_limited', 'Too many requests.'),
     )
@@ -158,6 +222,7 @@ describe('ProjectsPage create', () => {
     await userEvent.type(await screen.findByLabelText(/Project name/), 'Loft')
     await userEvent.click(screen.getByRole('button', { name: 'Create project' }))
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Too many requests.'))
+    expect(screen.getByRole('alert')).toHaveFocus()
     expect(screen.queryByRole('heading', { name: 'Opened project' })).not.toBeInTheDocument()
   })
 })
