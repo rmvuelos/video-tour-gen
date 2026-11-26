@@ -63,11 +63,117 @@ describe('ProjectPage', () => {
     expect(await screen.findByRole('heading', { name: 'Photos' })).toBeInTheDocument()
   })
 
-  it.each(['ingesting', 'ready'])('says a %s project cannot be changed', async (status) => {
-    answer(status)
+  it('says a ready project is ready, with no next step yet', async () => {
+    answer('ready')
     renderPage()
+    expect(await screen.findByText('Your files are ready.')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /preflight/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Photos' })).not.toBeInTheDocument()
+  })
+
+  it('follows the ingest of an ingesting project and shows the result when it is done', async () => {
+    let status = 'ingesting'
+    mock.apiFetch.mockImplementation((path: string) => {
+      if (path.endsWith('/jobs/latest')) {
+        status = 'ready'
+        return Promise.resolve({ id: 'j', status: 'done', error_code: null, files: [] })
+      }
+      return Promise.resolve(project(status))
+    })
+    renderPage()
+    expect(await screen.findByText('Your files are ready.')).toBeInTheDocument()
+    expect(mock.apiFetch.mock.calls.filter(([path]) => path === '/projects/p1')).toHaveLength(2)
+  })
+
+  it('returns to the uploader with the invalid files marked when the ingest needs fixes', async () => {
+    let status = 'ingesting'
+    mock.apiFetch.mockImplementation((path: string) => {
+      if (path.endsWith('/jobs/latest')) {
+        status = 'needs_fix'
+        return Promise.resolve({ id: 'j', status: 'done', error_code: null, files: [] })
+      }
+      if (path.endsWith('/files')) {
+        return Promise.resolve({
+          files: [
+            {
+              id: 'f1',
+              kind: 'photo',
+              filename: 'a.jpg',
+              size: 1,
+              mime: 'image/jpeg',
+              status: 'invalid',
+              error_code: 'corrupt_file',
+              page_index: null,
+            },
+            {
+              id: 'f2',
+              kind: 'photo',
+              filename: 'b.jpg',
+              size: 1,
+              mime: 'image/jpeg',
+              status: 'invalid',
+              error_code: 'too_large_pixels',
+              page_index: null,
+            },
+          ],
+        })
+      }
+      return Promise.resolve(project(status))
+    })
+    renderPage()
+    expect(await screen.findByRole('heading', { name: 'Photos' })).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('2 files need fixing')
     expect(
-      await screen.findByText(/already sent, so its files can't be changed/),
+      screen.getByText('The file is damaged or unreadable. Choose another one.'),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/too many pixels/)).toBeInTheDocument()
+  })
+
+  it('prefills the details of the project in the uploader', async () => {
+    mock.apiFetch.mockImplementation((path: string) =>
+      path.endsWith('/files')
+        ? Promise.resolve({ files: [] })
+        : Promise.resolve({ ...project('needs_fix'), area_m2: 64.5, description: 'North light' }),
+    )
+    renderPage()
+    expect(await screen.findByLabelText('Area (m²)')).toHaveValue('64.5')
+    expect(screen.getByLabelText('Description')).toHaveValue('North light')
+  })
+
+  it('switches to the ingest view after a successful submit', async () => {
+    const files = [
+      {
+        id: 'pl',
+        kind: 'plan',
+        filename: 'plan.pdf',
+        size: 1,
+        mime: 'application/pdf',
+        status: 'pending',
+        error_code: null,
+        page_index: null,
+      },
+      ...[1, 2, 3].map((n) => ({
+        id: `p${n}`,
+        kind: 'photo',
+        filename: `p${n}.jpg`,
+        size: 1,
+        mime: 'image/jpeg',
+        status: 'pending',
+        error_code: null,
+        page_index: null,
+      })),
+    ]
+    mock.apiFetch.mockImplementation((path: string, init?: { method?: string }) => {
+      if (path.endsWith('/submit')) return Promise.resolve({ id: 'j', status: 'queued' })
+      if (path.endsWith('/jobs/latest'))
+        return Promise.resolve({ id: 'j', status: 'queued', error_code: null, files: [] })
+      if (path.endsWith('/files')) return Promise.resolve({ files })
+      return init ? Promise.reject(new Error(path)) : Promise.resolve(project('draft'))
+    })
+    renderPage()
+    await userEvent.click(await screen.findByRole('button', { name: 'Continue to preflight' }))
+    expect(
+      await screen.findByText('Waiting to start…', { selector: 'p:not(.sr-only)' }),
     ).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Photos' })).not.toBeInTheDocument()
   })
