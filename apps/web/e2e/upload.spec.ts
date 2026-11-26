@@ -41,10 +41,15 @@ type Options = {
   outcome?: 'ready' | 'needs_fix'
   /** Where the signed URLs point; the default is a path on the mocked Supabase origin. */
   uploadBase?: string
+  /** The project name (the upload screen shows it in the overview card). */
+  name?: string
 }
 
 /** A tiny stateful backend: the files registered, the project status and the ingest job. */
-async function mockBackend(page: Page, { outcome = 'ready', uploadBase }: Options = {}) {
+async function mockBackend(
+  page: Page,
+  { outcome = 'ready', uploadBase, name = 'Arles bedroom' }: Options = {},
+) {
   await page.addInitScript(
     ([key, session]) => localStorage.setItem(key as string, JSON.stringify(session)),
     [SESSION_KEY, SESSION],
@@ -54,7 +59,7 @@ async function mockBackend(page: Page, { outcome = 'ready', uploadBase }: Option
   let status = 'draft'
   const project = () => ({
     id: 'p1',
-    name: 'Arles bedroom',
+    name,
     status,
     area_m2: null,
     description: null,
@@ -151,6 +156,10 @@ test('uploads a plan and photos, sends the details and follows the ingest to rea
   await addAll(page)
   await expect(send(page)).not.toHaveAttribute('aria-disabled', 'true')
 
+  const toggle = page.getByRole('button', { name: 'Add description' })
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true')
   await page.getByLabel('Area (m²)').fill('85,5')
   await page.getByLabel('Description').fill('Sunny corner flat')
   if (shotsDir) await page.screenshot({ path: `${shotsDir}/uploader-4d.png` })
@@ -166,6 +175,20 @@ test('uploads a plan and photos, sends the details and follows the ingest to rea
     area_m2: 85.5,
     description: 'Sunny corner flat',
   })
+})
+
+test('the empty upload screen keeps its look at 1920x1080', async ({ page }) => {
+  // Text antialiasing differs per OS: the baseline is the Windows one, so Linux CI skips it.
+  test.skip(process.platform !== 'win32', 'the visual baseline is rendered on Windows')
+  await page.setViewportSize({ width: 1920, height: 1080 })
+  await mockBackend(page, { name: 'The Arles bedroom' })
+  await page.goto('/projects/p1')
+  await expect(page.getByText('0 of 2 required sources')).toBeVisible()
+  await page.evaluate(() => document.fonts.ready)
+  await page.mouse.move(0, 0)
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+  if (shotsDir) await page.screenshot({ path: `${shotsDir}/uploader-maqueta.png` })
+  await expect(page).toHaveScreenshot('upload-empty.png', { maxDiffPixelRatio: 0.01 })
 })
 
 test('rejects a HEIC photo before uploading it', async ({ page }) => {
@@ -225,6 +248,11 @@ test('is usable at 1024 px without horizontal scroll', async ({ page }) => {
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   )
   expect(overflow).toBe(0)
+  // The two dropzones sit side by side from 1024 px.
+  const [plan, photos] = await Promise.all(
+    ['Floor plan', 'Photos'].map((name) => page.getByRole('group', { name }).boundingBox()),
+  )
+  expect(Math.abs(plan!.y - photos!.y)).toBeLessThan(1)
 })
 
 /** Accepts a PUT but reads the body in small steps, so the browser reports partial progress. */
