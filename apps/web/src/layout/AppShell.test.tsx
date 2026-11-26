@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router'
+import { Link, MemoryRouter, Route, Routes, useParams } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mock = vi.hoisted(() => ({ signOut: vi.fn(), session: undefined as unknown }))
@@ -19,6 +19,22 @@ beforeEach(() => {
 function NamedDetail() {
   useProjectCrumb('Arles bedroom')
   return <PageTitle>Detail page</PageTitle>
+}
+
+/** Supplies a name only for project "a": any other project is still loading. */
+function SwitchingDetail() {
+  const { id } = useParams()
+  return id === 'a' ? (
+    <>
+      <NamedDetail />
+      <Link to="/projects/b">to b</Link>
+    </>
+  ) : (
+    <>
+      <PageTitle>Other page</PageTitle>
+      <Link to="/projects">to list</Link>
+    </>
+  )
 }
 
 function renderAt(path: string, detail = <PageTitle>Detail page</PageTitle>) {
@@ -113,5 +129,24 @@ describe('AppShell', () => {
     const crumbs = within(screen.getByRole('navigation', { name: 'Breadcrumb' }))
     expect(crumbs.getByText('Arles bedroom')).toHaveAttribute('aria-current', 'page')
     expect(crumbs.queryByText('Project')).not.toBeInTheDocument()
+  })
+})
+
+describe('AppShell project crumb', () => {
+  const crumbs = () => within(screen.getByRole('navigation', { name: 'Breadcrumb' }))
+
+  it('does not keep the previous project name for the next project', async () => {
+    renderAt('/projects/a', <SwitchingDetail />)
+    expect(crumbs().getByText('Arles bedroom')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('link', { name: 'to b' }))
+    expect(crumbs().queryByText('Arles bedroom')).not.toBeInTheDocument()
+    expect(crumbs().getByText('Project')).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('clears the name when going back to the list', async () => {
+    renderAt('/projects/b', <SwitchingDetail />)
+    await userEvent.click(screen.getByRole('link', { name: 'to list' }))
+    expect(crumbs().queryByText('Arles bedroom')).not.toBeInTheDocument()
+    expect(crumbs().queryByText('Project')).not.toBeInTheDocument()
   })
 })

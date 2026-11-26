@@ -265,3 +265,21 @@ describe('ProjectPage reading the result of the ingest', () => {
     expect(screen.getByRole('heading', { name: 'Your files are ready' })).toBeInTheDocument()
   })
 })
+
+describe('ProjectPage heading', () => {
+  it.each(['draft', 'needs_fix'])(
+    'hides the h1 visually in the upload view (%s)',
+    async (status) => {
+      answer(status)
+      renderPage()
+      expect(await screen.findByRole('heading', { name: 'Loft', level: 1 })).toHaveClass('sr-only')
+    },
+  )
+
+  it.each(['ingesting', 'ready'])('shows the h1 in the %s view', async (status) => {
+    answer(status)
+    renderPage()
+    const heading = await screen.findByRole('heading', { name: 'Loft', level: 1 })
+    expect(heading).not.toHaveClass('sr-only')
+  })
+})
