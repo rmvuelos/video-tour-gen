@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { Route, Routes } from 'react-router'
 import { RequireAuth } from './auth/RequireAuth'
+import { PageTitle } from './components/PageTitle'
 import { AppShell } from './layout/AppShell'
 import { useDocumentTitle } from './lib/use-document-title'
 import { AuthPage } from './pages/AuthPage'
@@ -13,7 +14,7 @@ const UiGallery = galleryEnabled ? lazy(() => import('./dev/UiGallery')) : null
 
 function Home() {
   useDocumentTitle('Home')
-  return <h1 className="text-title font-semibold">Welcome back</h1>
+  return <PageTitle className="text-title font-semibold">Welcome back</PageTitle>
 }
 
 export function App() {

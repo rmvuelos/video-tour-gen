@@ -25,15 +25,23 @@ export function AppShell() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const user = userLabel(session?.user.email)
-  const onProject = pathname.startsWith('/projects/')
 
   return (
     <div className="flex min-h-screen bg-canvas text-fg">
       <Sidebar
-        current={onProject ? 'upload' : 'projects'}
+        current="projects"
         hrefs={HREFS}
         user={user}
         onNavigate={(id, event) => {
+          // Ctrl/Cmd/Shift-click and middle click keep the browser default (new tab or window).
+          if (
+            event.button !== 0 ||
+            event.metaKey ||
+            event.ctrlKey ||
+            event.shiftKey ||
+            event.altKey
+          )
+            return
           event.preventDefault()
           void navigate(HREFS[id])
         }}
@@ -53,7 +61,8 @@ export function AppShell() {
           </div>
         </header>
         <main className="flex-1 py-10">
-          <Outlet />
+          {/* key: a new route remounts the page, so its heading takes focus again */}
+          <Outlet key={pathname} />
         </main>
       </div>
     </div>

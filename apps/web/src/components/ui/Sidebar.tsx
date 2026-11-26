@@ -183,7 +183,6 @@ export function Sidebar({ current, hrefs, user, onNavigate, className = '', ...r
       <div className="mt-auto flex h-plan-card flex-col items-start gap-1.5 rounded-panel bg-surface-subtle px-4.75 pt-5.5 text-fg-muted">
         <Eyebrow tone="accent">Your plan</Eyebrow>
         <span className="text-subtitle font-semibold text-fg">Studio / Free</span>
-        <span className="mt-1 text-caption">2 of 5 projects used</span>
       </div>
       <div aria-hidden="true" className="ml-2.25 mr-3 mt-7 h-px bg-line" />
       <div className="mt-6.5 flex items-center gap-3 px-3.25">
