@@ -6,6 +6,7 @@ import { AppShell } from './layout/AppShell'
 import { useDocumentTitle } from './lib/use-document-title'
 import { AuthPage } from './pages/AuthPage'
 import { NotFound } from './pages/NotFound'
+import { ProjectPage } from './pages/ProjectPage'
 
 // The gallery is dev and e2e only. The import sits in the dead branch so production builds
 // drop the chunk (scripts/check-no-dev-routes.mjs fails CI if it ever ships).
@@ -35,6 +36,7 @@ export function App() {
       <Route element={<RequireAuth />}>
         <Route element={<AppShell />}>
           <Route path="/" element={<Home />} />
+          <Route path="/projects/:id" element={<ProjectPage />} />
         </Route>
       </Route>
       <Route path="*" element={<NotFound />} />
