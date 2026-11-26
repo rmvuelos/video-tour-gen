@@ -1,7 +1,7 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Link, MemoryRouter, Route, Routes } from 'react-router'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mock = vi.hoisted(() => ({ apiFetch: vi.fn() }))
 vi.mock('../lib/api', async (importActual) => ({
@@ -66,7 +66,8 @@ describe('ProjectPage', () => {
   it('says a ready project is ready, with no next step yet', async () => {
     answer('ready')
     renderPage()
-    expect(await screen.findByText('Your files are ready.')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Your files are ready' })).toHaveFocus()
+    expect(await screen.findByRole('heading', { name: 'Your files are ready' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /preflight/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Photos' })).not.toBeInTheDocument()
   })
@@ -81,7 +82,7 @@ describe('ProjectPage', () => {
       return Promise.resolve(project(status))
     })
     renderPage()
-    expect(await screen.findByText('Your files are ready.')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Your files are ready' })).toBeInTheDocument()
     expect(mock.apiFetch.mock.calls.filter(([path]) => path === '/projects/p1')).toHaveLength(2)
   })
 
@@ -201,5 +202,65 @@ describe('ProjectPage', () => {
     })
     renderPage().unmount()
     expect(signal?.aborted).toBe(true)
+  })
+})
+
+describe('ProjectPage reading the result of the ingest', () => {
+  const done = { id: 'j', status: 'done', error_code: null, files: [] }
+  const tick = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms))
+
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  /** Each entry answers one GET of the project, in order (the last one repeats). */
+  function ingestWith(reads: (() => unknown)[]) {
+    let n = 0
+    mock.apiFetch.mockImplementation((path: string) => {
+      if (path.endsWith('/jobs/latest')) return Promise.resolve(done)
+      if (path.endsWith('/files')) return Promise.resolve({ files: [] })
+      const read = reads[Math.min(n++, reads.length - 1)]!
+      return Promise.resolve().then(read)
+    })
+  }
+  const ingesting = () => project('ingesting')
+  const ready = () => project('ready')
+  const down = () => {
+    throw new ApiRequestError(0, 'network_error', 'Could not reach the server.')
+  }
+  const reads = () => mock.apiFetch.mock.calls.filter(([path]) => path === '/projects/p1').length
+
+  it('keeps the view and reads again after 2 s when it still reads ingesting', async () => {
+    ingestWith([ingesting, ingesting, ready])
+    renderPage()
+    await tick(100)
+    expect(screen.getByRole('heading', { name: 'Checking your files' })).toBeInTheDocument()
+    expect(reads()).toBe(2)
+    await tick(2000)
+    expect(screen.getByRole('heading', { name: 'Your files are ready' })).toBeInTheDocument()
+  })
+
+  it('keeps the view through network errors on the re-read', async () => {
+    ingestWith([ingesting, down, ready])
+    renderPage()
+    await tick(100)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Checking your files' })).toBeInTheDocument()
+    await tick(2000)
+    expect(screen.getByRole('heading', { name: 'Your files are ready' })).toBeInTheDocument()
+  })
+
+  it('shows the error with Try again after 5 failed re-reads, and Try again reads once more', async () => {
+    ingestWith([ingesting, down])
+    renderPage()
+    await tick(12_000)
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not reach the server.')
+    ingestWith([ready])
+    await act(async () => screen.getByRole('button', { name: 'Try again' }).click())
+    await tick(100)
+    expect(screen.getByRole('heading', { name: 'Your files are ready' })).toBeInTheDocument()
   })
 })
