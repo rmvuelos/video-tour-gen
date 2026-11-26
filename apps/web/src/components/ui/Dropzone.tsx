@@ -116,7 +116,7 @@ export function Dropzone(props: Props) {
         <span className="inline-flex size-tile items-center justify-center rounded-card-lg bg-tile text-fg-accent">
           <Icon src={icon} size="lg" />
         </span>
-        <Heading id={titleId} className="text-title-sm font-medium">
+        <Heading id={titleId} className="text-title font-semibold">
           {title}
         </Heading>
         <p id={helpId} className="text-body text-fg-muted">
