@@ -106,4 +106,25 @@ describe('uploaderReducer', () => {
       '4 photos uploaded',
     )
   })
+
+  it('marks the files the server refused as invalid, with their message', () => {
+    const before = withItems(item('a', { status: 'pending' }), item('b', { status: 'pending' }))
+    const after = reduce(before, {
+      type: 'invalidated',
+      errors: [
+        { id: 'b', error: 'The upload did not finish.' },
+        { id: 'zzz', error: 'ignored' },
+      ],
+    })
+    expect(after.items[0]?.status).toBe('pending')
+    expect(after.items[1]).toMatchObject({ status: 'invalid', error: 'The upload did not finish.' })
+    // The screen alert says how many need fixing; the live region stays quiet.
+    expect(after.announcement).toBe('')
+    expect(before.items[1]?.status).toBe('pending')
+  })
+
+  it('does nothing when none of the refused files is on screen', () => {
+    const before = withItems(item('a', { status: 'pending' }))
+    expect(reduce(before, { type: 'invalidated', errors: [{ id: 'x', error: 'e' }] })).toBe(before)
+  })
 })

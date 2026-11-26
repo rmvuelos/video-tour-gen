@@ -23,7 +23,11 @@ export type UploadTarget = {
   upload_url: string
   headers: Record<string, string>
 }
-export type SubmitOptions = { plan_page_index?: number; area_m2?: number; description?: string }
+export type SubmitOptions = {
+  plan_page_index?: number
+  area_m2?: number | null
+  description?: string | null
+}
 export type Job = { id: string; project_id: string; status: JobStatus; created_at: string }
 export type JobState = Job & {
   error_code: string | null

@@ -8,6 +8,8 @@ export type Project = {
   id: string
   name: string
   status: ProjectStatus
+  area_m2?: number | null
+  description?: string | null
   created_at: string
 }
 type ProjectPage = { items: Project[]; limit: number; offset: number }

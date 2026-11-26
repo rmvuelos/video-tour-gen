@@ -8,10 +8,10 @@ type Variant = 'primary' | 'secondary' | 'cta'
 // an outline there. It sits inside the Figma height, so paddings are 2px short of the Figma ones.
 const VARIANTS: Record<Variant, string> = {
   primary:
-    'h-btn-pill min-w-btn-pill-w rounded-pill bg-action px-6 text-label font-medium text-fg-on-action enabled:hover:bg-action-hover',
+    'h-btn-pill min-w-btn-pill-w rounded-pill bg-action px-6 text-label font-medium text-fg-on-action enabled:not-aria-disabled:hover:bg-action-hover',
   secondary:
-    'h-btn-soft min-w-btn-soft-w rounded-pill bg-control px-6 text-label font-medium text-fg enabled:hover:bg-control-hover',
-  cta: 'h-btn-cta gap-btn-cta-gap rounded-control bg-action pr-btn-cta-end pl-btn-cta-start text-body font-semibold text-fg-on-action enabled:hover:bg-action-hover',
+    'h-btn-soft min-w-btn-soft-w rounded-pill bg-control px-6 text-label font-medium text-fg enabled:not-aria-disabled:hover:bg-control-hover',
+  cta: 'h-btn-cta gap-btn-cta-gap rounded-control bg-action pr-btn-cta-end pl-btn-cta-start text-body font-semibold text-fg-on-action enabled:not-aria-disabled:hover:bg-action-hover',
 }
 
 type Props = ComponentProps<'button'> & { variant?: Variant }
