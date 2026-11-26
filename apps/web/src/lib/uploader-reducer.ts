@@ -40,6 +40,7 @@ export type UploaderAction =
   | { type: 'removed'; id: string }
   | { type: 'restore'; item: UploaderItem; index: number; error: string }
   | { type: 'error'; error: string | null }
+  | { type: 'invalidated'; errors: { id: string; error: string }[] }
   | { type: 'announce'; text: string }
 
 export const initialState: UploaderState = {
@@ -108,6 +109,15 @@ export function uploaderReducer(state: UploaderState, action: UploaderAction): U
     }
     case 'error':
       return { ...state, error: action.error }
+    case 'invalidated': {
+      const messages = new Map(action.errors.map((e) => [e.id, e.error]))
+      const hit = state.items.filter((i) => messages.has(i.id)).length
+      if (hit === 0) return state
+      const items = state.items.map((i) =>
+        messages.has(i.id) ? { ...i, status: 'invalid' as const, error: messages.get(i.id) } : i,
+      )
+      return say({ ...state, items }, `${hit} ${hit === 1 ? 'file needs' : 'files need'} fixing`)
+    }
     case 'announce':
       return say(state, action.text)
   }
