@@ -3,6 +3,7 @@
 import os
 from collections.abc import Callable
 from typing import Any
+from uuid import uuid4
 
 import httpx2 as httpx
 import pytest
@@ -169,3 +170,40 @@ def test_a_signing_failure_leaves_no_rows_taking_up_slots(
 
     assert failed.status_code == 502
     assert retried.status_code == 201  # the maximum fits again: the failed rows are gone
+
+
+def test_lists_only_your_files_plan_first(
+    client: TestClient, make_user: Callable[[], Account]
+) -> None:
+    ana, ben = make_user(), make_user()
+    project = client.post("/projects", json={"name": "Casa"}, headers=ana.headers).json()
+    url = f"/projects/{project['id']}/files"
+
+    def add(kind: str, name: str) -> str:
+        item = {"kind": kind, "filename": name, "size": 20, "mime": MIMES[kind]}
+        response = client.post(url, json={"files": [item]}, headers=ana.headers)
+        assert response.status_code == 201
+        return str(response.json()["files"][0]["file_id"])
+
+    photos = [add("photo", "a.jpg"), add("photo", "b.jpg")]
+    plan_id = add("plan", "p.pdf")  # registered last: first only thanks to the ordering
+
+    listed = client.get(url, headers=ana.headers)
+    foreign = client.get(url, headers=ben.headers)
+    unknown = client.get(f"/projects/{uuid4()}/files", headers=ben.headers)
+
+    assert listed.status_code == 200
+    files = listed.json()["files"]
+    assert [f["id"] for f in files] == [plan_id, *photos]
+    assert files[0] == {
+        "id": plan_id,
+        "kind": "plan",
+        "filename": "p.pdf",
+        "size": 20,
+        "mime": "application/pdf",
+        "status": "pending",
+        "error_code": None,
+        "page_index": None,
+    }
+    assert foreign.status_code == unknown.status_code == 404
+    assert foreign.json() == unknown.json()
