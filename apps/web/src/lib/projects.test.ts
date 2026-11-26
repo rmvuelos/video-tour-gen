@@ -46,13 +46,13 @@ describe('project requests', () => {
     expect(api.apiFetch).toHaveBeenCalledWith('/projects', {
       method: 'POST',
       body: { name: 'Loft' },
-      signal: undefined,
+      signal: null,
     })
   })
 
   it('gets one project by id, encoded', async () => {
     api.apiFetch.mockResolvedValue({ id: 'p1' })
     await getProject('a/b')
-    expect(api.apiFetch).toHaveBeenCalledWith('/projects/a%2Fb', { signal: undefined })
+    expect(api.apiFetch).toHaveBeenCalledWith('/projects/a%2Fb', { signal: null })
   })
 })

@@ -23,11 +23,11 @@ export function projectNameError(name: string): string | undefined {
   return undefined
 }
 
-export const listProjects = (offset: number, signal?: AbortSignal) =>
+export const listProjects = (offset: number, signal: AbortSignal | null = null) =>
   apiFetch<ProjectPage>(`/projects?limit=${PAGE_SIZE}&offset=${offset}`, { signal })
 
-export const createProject = (name: string, signal?: AbortSignal) =>
+export const createProject = (name: string, signal: AbortSignal | null = null) =>
   apiFetch<Project>('/projects', { method: 'POST', body: { name: name.trim() }, signal })
 
-export const getProject = (id: string, signal?: AbortSignal) =>
+export const getProject = (id: string, signal: AbortSignal | null = null) =>
   apiFetch<Project>(`/projects/${encodeURIComponent(id)}`, { signal })
