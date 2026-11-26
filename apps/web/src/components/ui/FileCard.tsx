@@ -63,7 +63,11 @@ export function FileCard({ file: f, preview, onRemove, className = '', ...state 
         <ProgressBar label={`Uploading ${f.name}`} value={percent} />
       )}
       {state.status === 'error' && (
-        <div className="flex items-start gap-3 rounded-panel border border-danger bg-surface-subtle p-4 text-body">
+        <div
+          tabIndex={-1}
+          data-file-error=""
+          className="flex items-start gap-3 rounded-panel border border-danger bg-surface-subtle p-4 text-body outline-none"
+        >
           <Icon src={alert} className="text-danger" />
           <p id={messageId} className="flex-1">
             <span className="sr-only">{f.name}:</span> {state.error}

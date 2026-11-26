@@ -172,7 +172,7 @@ describe('ProjectPage', () => {
       return init?.method ? Promise.reject(new Error(path)) : Promise.resolve(project('draft'))
     })
     renderPage()
-    await userEvent.click(await screen.findByRole('button', { name: 'Continue to preflight' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Check my files' }))
     expect(
       await screen.findByText('Waiting to start…', { selector: 'p:not(.sr-only)' }),
     ).toBeInTheDocument()
@@ -256,7 +256,8 @@ describe('ProjectPage reading the result of the ingest', () => {
   it('shows the error with Try again after 5 failed re-reads, and Try again reads once more', async () => {
     ingestWith([ingesting, down])
     renderPage()
-    await tick(12_000)
+    // One act per step: React renders the next read only when an act ends.
+    for (let i = 0; i < 6; i++) await tick(2000)
     expect(screen.getByRole('alert')).toHaveTextContent('Could not reach the server.')
     ingestWith([ready])
     await act(async () => screen.getByRole('button', { name: 'Try again' }).click())

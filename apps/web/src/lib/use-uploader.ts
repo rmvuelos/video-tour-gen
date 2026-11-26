@@ -317,6 +317,8 @@ export function useUploader(projectId: string) {
     [],
   )
 
+  const announce = useCallback((text: string) => dispatch({ type: 'announce', text }), [])
+
   const reload = useCallback(() => setReloadKey((k) => k + 1), [])
 
   const counts = Object.fromEntries(
@@ -337,6 +339,7 @@ export function useUploader(projectId: string) {
     submit: canSubmit(state.items),
     reload,
     markInvalid,
+    announce,
     add,
     retry,
     remove,

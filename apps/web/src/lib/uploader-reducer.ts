@@ -116,7 +116,8 @@ export function uploaderReducer(state: UploaderState, action: UploaderAction): U
       const items = state.items.map((i) =>
         messages.has(i.id) ? { ...i, status: 'invalid' as const, error: messages.get(i.id) } : i,
       )
-      return say({ ...state, items }, `${hit} ${hit === 1 ? 'file needs' : 'files need'} fixing`)
+      // The screen alert says how many need fixing, so the live region stays quiet.
+      return { ...state, items }
     }
     case 'announce':
       return say(state, action.text)
