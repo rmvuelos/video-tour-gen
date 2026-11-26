@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { UploadStatus } from './upload-rules'
-import { canSubmit, errorCodeMessage, rejectionMessage, remainingSlots } from './upload-rules'
+import {
+  canSubmit,
+  errorCodeMessage,
+  rejectionMessage,
+  remainingSlots,
+  sourceProgress,
+} from './upload-rules'
 
 const jpg = { name: 'kitchen.jpg', size: 1000, type: 'image/jpeg' }
 const gif = { name: 'a.gif', size: 10, type: 'image/gif' }
@@ -175,5 +181,43 @@ describe('errorCodeMessage', () => {
     expect(errorCodeMessage('nope')).toBe('Something went wrong. Try again.')
     expect(errorCodeMessage(null, 'a.jpg')).toBe('a.jpg: Something went wrong. Try again.')
     expect(errorCodeMessage('constructor')).toBe('Something went wrong. Try again.')
+  })
+})
+
+describe('sourceProgress', () => {
+  it('counts no source with an empty project', () => {
+    expect(sourceProgress([])).toEqual({
+      plan: { count: 0, max: 1, met: false },
+      photos: { count: 0, min: 3, max: 10, met: false },
+      met: 0,
+      total: 2,
+    })
+  })
+
+  it('meets the plan with one finished file and the photos from three', () => {
+    expect(sourceProgress([plan, ...photos(2)]).met).toBe(1)
+    const full = sourceProgress([plan, ...photos(3)])
+    expect(full).toMatchObject({ plan: { count: 1, met: true }, photos: { count: 3, met: true } })
+    expect(full.met).toBe(2)
+  })
+
+  it('does not count files still uploading, failed or invalid', () => {
+    const files = [
+      state('plan', 'uploading'),
+      ...photos(1),
+      ...photos(1, 'failed'),
+      ...photos(1, 'invalid'),
+      ...photos(1, 'uploading'),
+    ]
+    expect(sourceProgress(files)).toMatchObject({
+      plan: { count: 0, met: false },
+      photos: { count: 1, met: false },
+      met: 0,
+    })
+  })
+
+  it('counts pending (a finished PUT) and valid files as done', () => {
+    const files = [state('plan', 'pending'), ...photos(3, 'valid')]
+    expect(sourceProgress(files).met).toBe(2)
   })
 })
