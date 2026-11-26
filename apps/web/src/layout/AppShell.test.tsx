@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -7,6 +7,7 @@ const mock = vi.hoisted(() => ({ signOut: vi.fn(), session: undefined as unknown
 vi.mock('../lib/supabase', () => ({ getSupabase: () => ({ auth: { signOut: mock.signOut } }) }))
 vi.mock('../auth/session', () => ({ useSession: () => mock.session }))
 
+import { PageTitle } from '../components/PageTitle'
 import { AppShell } from './AppShell'
 
 beforeEach(() => {
@@ -19,8 +20,8 @@ function renderAt(path: string) {
     <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route element={<AppShell />}>
-          <Route path="/projects" element={<h1>List page</h1>} />
-          <Route path="/projects/:id" element={<h1>Detail page</h1>} />
+          <Route path="/projects" element={<PageTitle>List page</PageTitle>} />
+          <Route path="/projects/:id" element={<PageTitle>Detail page</PageTitle>} />
         </Route>
       </Routes>
     </MemoryRouter>,
@@ -49,12 +50,13 @@ describe('AppShell', () => {
     )
   })
 
-  it('marks Upload assets as current on a project page', () => {
+  it('keeps My projects current on a project page, never Upload assets', () => {
     renderAt('/projects/abc')
-    expect(screen.getByRole('link', { name: /Upload assets/ })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'My projects' })).toHaveAttribute(
       'aria-current',
       'page',
     )
+    expect(screen.getByRole('link', { name: /Upload assets/ })).not.toHaveAttribute('aria-current')
   })
 
   it('shows the breadcrumb for the current route', () => {
@@ -69,6 +71,24 @@ describe('AppShell', () => {
     await userEvent.click(screen.getByRole('link', { name: 'My projects' }))
     expect(screen.getByRole('heading', { name: 'List page' })).toBeInTheDocument()
   })
+
+  it('moves focus to the new page heading after navigating', async () => {
+    renderAt('/projects/abc')
+    await userEvent.click(screen.getByRole('link', { name: 'My projects' }))
+    expect(screen.getByRole('heading', { name: 'List page' })).toHaveFocus()
+  })
+
+  it.each([{ ctrlKey: true }, { metaKey: true }, { shiftKey: true }, { button: 1 }])(
+    'leaves a modified click %j to the browser, to open another tab',
+    (init) => {
+      renderAt('/projects/abc')
+      const link = screen.getByRole('link', { name: 'My projects' })
+      // fireEvent returns false when the handler called preventDefault.
+      const untouched = fireEvent.click(link, init)
+      expect(untouched).toBe(true)
+      expect(screen.getByRole('heading', { name: 'Detail page' })).toBeInTheDocument()
+    },
+  )
 
   it('signs out of this browser only', async () => {
     renderAt('/projects')

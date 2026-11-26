@@ -108,6 +108,7 @@ describe('Plan card and decorative parts', () => {
   it('shows the plan as plain text: not a button, not focusable', () => {
     setup()
     expect(screen.getByText('Studio / Free')).toBeVisible()
+    expect(screen.queryByText(/projects used/)).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Your plan/ })).not.toBeInTheDocument()
   })
 
