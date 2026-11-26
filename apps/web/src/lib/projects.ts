@@ -3,7 +3,7 @@ import { apiFetch } from './api'
 export const PAGE_SIZE = 20
 export const NAME_MAX = 120
 
-export type ProjectStatus = 'draft' | 'ingesting' | 'ready' | 'needs_fix'
+type ProjectStatus = 'draft' | 'ingesting' | 'ready' | 'needs_fix'
 export type Project = {
   id: string
   name: string
