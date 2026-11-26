@@ -4,7 +4,12 @@ import limits from '../../../../shared/input-limits.json'
 import fileIcon from '../assets/icons/file.svg'
 import imageIcon from '../assets/icons/image.svg'
 import { formatBytes } from '../lib/format-bytes'
-import { rejectionMessage, type FileKind, type RejectionReason } from '../lib/upload-rules'
+import {
+  fullMessage,
+  rejectionMessage,
+  type FileKind,
+  type RejectionReason,
+} from '../lib/upload-rules'
 import { useUploader } from '../lib/use-uploader'
 import type { UploaderItem } from '../lib/uploader-reducer'
 import { Alert } from './ui/Alert'
@@ -79,24 +84,40 @@ export function Uploader({ projectId }: { projectId: string }) {
     const list = up.items.filter((i) => i.kind === item.kind)
     const at = list.findIndex((i) => i.id === item.id)
     const near = list[at + 1] ?? list[at - 1]
+    if (!up.remove(item.id)) return
     focusNext.current = near ? { file: near.id } : { zone: item.kind }
-    void up.remove(item.id)
   }
 
-  if (up.phase === 'loading') return <p className="text-body text-fg-muted">Loading files…</p>
+  // One live region for the whole screen, mounted from the start so announcements are heard.
+  const status = (
+    <p role="status" className="sr-only">
+      {up.phase === 'loading' ? 'Loading files…' : up.announcement}
+    </p>
+  )
+  if (up.phase === 'loading') {
+    return (
+      <div>
+        {status}
+        <p aria-hidden="true" className="text-body text-fg-muted">
+          Loading files…
+        </p>
+      </div>
+    )
+  }
   if (up.phase === 'error') {
     return (
-      <Alert tone="error" action={{ label: 'Try again', onClick: up.reload }}>
-        {up.loadError}
-      </Alert>
+      <div>
+        {status}
+        <Alert tone="error" action={{ label: 'Try again', onClick: up.reload }}>
+          {up.loadError}
+        </Alert>
+      </div>
     )
   }
 
   return (
     <div ref={root} className="flex flex-col gap-8">
-      <p role="status" className="sr-only">
-        {up.announcement}
-      </p>
+      {status}
       {up.error && <Alert tone="error">{up.error}</Alert>}
       {(Object.keys(SECTIONS) as FileKind[]).map((kind) => {
         const s = SECTIONS[kind]
@@ -114,24 +135,29 @@ export function Uploader({ projectId }: { projectId: string }) {
               maxSize={s.maxSize}
               maxFiles={slots}
               disabled={slots === 0}
+              {...(slots === 0 && { disabledReason: fullMessage(kind) })}
               onFilesAccepted={(files) => void up.add(kind, files)}
               rejectionText={({ file, errors }: FileRejection) =>
                 rejectionMessage(file, kind, REASONS[errors[0]?.code ?? ''] ?? 'type', slots)
               }
             />
-            <ul aria-label={s.label} className="flex flex-col gap-3">
-              {up.items
-                .filter((i) => i.kind === kind)
-                .map((item) => (
-                  <li key={item.id} data-file-id={item.id}>
-                    <FileCard
-                      file={item.file ?? { name: item.filename, size: item.size, type: item.mime }}
-                      onRemove={() => remove(item)}
-                      {...cardState(item, () => void up.retry(item.id))}
-                    />
-                  </li>
-                ))}
-            </ul>
+            {up.items.some((i) => i.kind === kind) && (
+              <ul role="list" aria-label={s.label} className="flex flex-col gap-3">
+                {up.items
+                  .filter((i) => i.kind === kind)
+                  .map((item) => (
+                    <li key={item.id} data-file-id={item.id}>
+                      <FileCard
+                        file={
+                          item.file ?? { name: item.filename, size: item.size, type: item.mime }
+                        }
+                        onRemove={() => remove(item)}
+                        {...cardState(item, () => void up.retry(item.id))}
+                      />
+                    </li>
+                  ))}
+              </ul>
+            )}
           </section>
         )
       })}

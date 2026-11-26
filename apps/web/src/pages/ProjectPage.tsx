@@ -42,7 +42,7 @@ function ProjectView({ id }: { id: string }) {
         {state.project.name}
       </PageTitle>
       {EDITABLE.has(state.project.status) ? (
-        <Uploader projectId={state.project.id} />
+        <Uploader key={state.project.id} projectId={state.project.id} />
       ) : (
         <p className="text-body text-fg-muted">
           This project was already sent, so its files can&apos;t be changed.

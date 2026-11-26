@@ -33,6 +33,9 @@ function countMessage(kind: FileKind, fit: number): string {
     : `You already have ${plural(RULES.photo.max, 'photo')}. Remove one to add another.`
 }
 
+/** Why no more files of this kind can be added right now. */
+export const fullMessage = (kind: FileKind) => countMessage(kind, 0)
+
 /** What fails and what to do, for a file the Dropzone refused. `fit` = slots left (count only). */
 export function rejectionMessage(
   file: { name: string; size: number; type: string },
