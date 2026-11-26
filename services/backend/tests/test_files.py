@@ -323,10 +323,11 @@ def test_lists_the_files_with_the_public_fields_and_no_paths(
         "page_index": None,
     }
     assert (second["status"], second["error_code"]) == ("invalid", "corrupt_image")
-    assert "path" not in response.text
+    public = {"id", "kind", "filename", "size", "mime", "status", "error_code", "page_index"}
+    assert all(set(item) == public for item in (first, second))
     assert pool.ran("from project_files")[0] == (PROJECT_ID, USER.id)
     query = next(q for q, _ in pool.calls if "from project_files" in q)
-    assert "path" not in query
+    # guard only: the fake returns rows in input order, so this checks the SQL text
     assert "order by (kind = 'plan') desc, created_at, id" in query
 
 

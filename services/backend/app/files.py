@@ -38,6 +38,7 @@ INSERT = (
 SELECT_FILE = (
     "select id, original_path from project_files where id = %s and project_id = %s and user_id = %s"
 )
+# Bounded by the per-project caps in input-limits (1 plan + 10 photos): no pagination.
 LIST_FILES = (
     "select id, kind, original_filename, size_bytes, declared_mime, status, error_code, page_index "
     "from project_files where project_id = %s and user_id = %s "
