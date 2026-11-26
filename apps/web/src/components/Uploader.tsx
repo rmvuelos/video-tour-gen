@@ -69,7 +69,7 @@ export function Uploader({
   onSubmitted,
 }: {
   projectId: string
-  initial?: { area_m2?: number | null; description?: string | null }
+  initial?: { area_m2?: number | null | undefined; description?: string | null | undefined }
   onSubmitted: (job: Job) => void
 }) {
   const up = useUploader(projectId)

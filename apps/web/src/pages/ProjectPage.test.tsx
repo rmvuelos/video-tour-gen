@@ -168,7 +168,7 @@ describe('ProjectPage', () => {
       if (path.endsWith('/jobs/latest'))
         return Promise.resolve({ id: 'j', status: 'queued', error_code: null, files: [] })
       if (path.endsWith('/files')) return Promise.resolve({ files })
-      return init ? Promise.reject(new Error(path)) : Promise.resolve(project('draft'))
+      return init?.method ? Promise.reject(new Error(path)) : Promise.resolve(project('draft'))
     })
     renderPage()
     await userEvent.click(await screen.findByRole('button', { name: 'Continue to preflight' }))

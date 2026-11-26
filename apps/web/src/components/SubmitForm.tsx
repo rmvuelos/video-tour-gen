@@ -12,7 +12,8 @@ type Props = {
   projectId: string
   /** From `canSubmit`: why sending is blocked, or ok. */
   check: { ok: true } | { ok: false; reason: string }
-  initial?: { area_m2?: number | null; description?: string | null } | undefined
+  initial?:
+    { area_m2?: number | null | undefined; description?: string | null | undefined } | undefined
   onSubmitted: (job: Job) => void
   onFileErrors: (errors: { id: string; error: string }[]) => void
 }
