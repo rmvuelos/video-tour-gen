@@ -12,7 +12,7 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 from app.auth import CurrentUserDep
 from app.db import Pool, PoolDep, connection
 from app.errors import ERROR_RESPONSES, ApiError, ErrorDetail
-from app.files import LOCK, input_limits
+from app.files import EDITABLE_STATUSES, LOCK, input_limits
 from app.ratelimit import SubmitLimit
 from app.settings import Settings, get_settings
 from app.storage import ObjectStorage, StorageDep
@@ -37,7 +37,7 @@ ACTIVE_JOB = (
     "and type = 'ingest' and status in ('queued', 'running') limit 1"
 )
 FILES = (
-    "select id, kind, size_bytes, original_path, status from project_files "
+    "select id, kind, size_bytes, original_path, original_filename, status from project_files "
     "where project_id = %s and user_id = %s"
 )
 MARK = (
@@ -46,6 +46,7 @@ MARK = (
 )
 PAGE = (
     "update project_files set page_index = %s where project_id = %s and user_id = %s "
+    "and status = 'uploaded' "
     "and kind = 'plan'"
 )
 # coalesce: details not sent now keep what an earlier attempt saved.
@@ -61,9 +62,7 @@ FAIL_JOB = (
     "update jobs set status = 'failed', error_code = 'enqueue_failed', finished_at = now() "
     "where id = %s and user_id = %s and status = 'queued'"
 )
-REOPEN = (
-    "update projects set status = 'draft' where id = %s and user_id = %s and status = 'ingesting'"
-)
+REOPEN = "update projects set status = %s where id = %s and user_id = %s and status = 'ingesting'"
 
 
 def _note(value: str) -> str:
@@ -92,6 +91,7 @@ class Outcome:
     job: Job
     created: bool  # a new job: if the broker refuses it, release the project
     send: bool  # (re)send the message
+    reopen_to: str = "draft"  # where the project goes back if the broker refuses a new job
 
 
 def configure_publisher(settings: Settings | None = None) -> None:
@@ -132,6 +132,18 @@ def _check_counts(rows: list[dict[str, Any]]) -> list[ErrorDetail]:
     return errors
 
 
+def _check_invalid(rows: list[dict[str, Any]]) -> list[ErrorDetail]:
+    return [
+        _detail(
+            "invalid_file",
+            f"Replace or remove {row['original_filename']} before sending again.",
+            str(row["id"]),
+        )
+        for row in rows
+        if row["status"] == "invalid"
+    ]
+
+
 def _check_objects(rows: list[dict[str, Any]], storage: ObjectStorage) -> list[ErrorDetail]:
     errors = []
     for row in rows:
@@ -153,21 +165,19 @@ def _check_objects(rows: list[dict[str, Any]], storage: ObjectStorage) -> list[E
 
 def _lock_and_find_job(
     conn: psycopg.Connection[DictRow], project_id: UUID, user_id: UUID
-) -> Outcome | None:
-    """Lock the project. An active job wins (idempotent submit); otherwise it must be a draft."""
+) -> tuple[str, Outcome | None]:
+    """Lock the project. An active job wins (idempotent submit); otherwise it must be editable.
+    Returns the project status too, so a refused broker can put it back where it was."""
     project = conn.execute(LOCK, (project_id, user_id)).fetchone()
     if project is None:
         raise not_found()
     active = conn.execute(ACTIVE_JOB, (project_id, user_id)).fetchone()
     if active:
-        return Outcome(
-            Job.model_validate(active),
-            created=False,
-            send=bool(active.get("stale")),
-        )
-    if project["status"] != "draft":
+        outcome = Outcome(Job.model_validate(active), created=False, send=bool(active.get("stale")))
+        return project["status"], outcome
+    if project["status"] not in EDITABLE_STATUSES:
         raise ApiError(409, "project_not_draft", "This project was already sent.")
-    return None
+    return project["status"], None
 
 
 def _fingerprint(rows: list[dict[str, Any]]) -> frozenset[tuple[Any, ...]]:
@@ -182,19 +192,21 @@ def _create_job(
     seen: list[dict[str, Any]],
 ) -> Outcome:
     with connection(pool) as conn:
-        found = _lock_and_find_job(conn, project_id, user_id)  # a concurrent submit may have won
+        status, found = _lock_and_find_job(conn, project_id, user_id)  # a concurrent submit may win
         if found:
             return found
         rows = conn.execute(FILES, (project_id, user_id)).fetchall()
         if _fingerprint(rows) != _fingerprint(seen):  # storage was checked without the lock
             raise ApiError(409, "files_changed", "The files changed while sending. Try again.")
         for row in rows:
+            if row["status"] != "pending":  # valid files keep their derivatives
+                continue
             conn.execute(MARK, (row["id"], project_id, user_id))
         if body.plan_page_index is not None:
             conn.execute(PAGE, (body.plan_page_index, project_id, user_id))
         conn.execute(SAVE_PROJECT, (body.area_m2, body.description, project_id, user_id))
         job = conn.execute(INSERT_JOB, (project_id, user_id)).fetchone()
-        return Outcome(Job.model_validate(job), created=True, send=True)
+        return Outcome(Job.model_validate(job), created=True, send=True, reopen_to=status)
 
 
 def send_job(job: Job) -> None:
@@ -207,12 +219,12 @@ def send_job(job: Job) -> None:
         ) from exc
 
 
-def _release(pool: Pool, job: Job, user_id: UUID) -> None:
+def _release(pool: Pool, job: Job, user_id: UUID, reopen_to: str) -> None:
     """The job was committed before sending (so the worker always finds it). The broker refused:
     fail the job and reopen the project, so the user can submit again."""
     with connection(pool) as conn:
         conn.execute(FAIL_JOB, (job.id, user_id))
-        conn.execute(REOPEN, (job.project_id, user_id))
+        conn.execute(REOPEN, (reopen_to, job.project_id, user_id))
 
 
 @router.post("/{project_id}/submit", status_code=202)
@@ -226,10 +238,10 @@ def submit(
 ) -> Job:
     project_uuid = parse_id(project_id)
     with connection(pool) as conn:  # short read: no network while a connection is held
-        outcome = _lock_and_find_job(conn, project_uuid, user.id)
+        _, outcome = _lock_and_find_job(conn, project_uuid, user.id)
         rows = [] if outcome else conn.execute(FILES, (project_uuid, user.id)).fetchall()
     if outcome is None:
-        errors = _check_counts(rows) or _check_objects(rows, storage)
+        errors = _check_invalid(rows) or _check_counts(rows) or _check_objects(rows, storage)
         if errors:
             raise ApiError(
                 422, "invalid_files", "The project is not ready to send.", details=errors
@@ -240,6 +252,6 @@ def submit(
             send_job(outcome.job)
         except ApiError:
             if outcome.created:
-                _release(pool, outcome.job, user.id)
+                _release(pool, outcome.job, user.id, outcome.reopen_to)
             raise
     return outcome.job

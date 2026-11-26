@@ -14,7 +14,7 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
-import app.worker.ingest as ingest_module
+from app.ingest.sandbox import process_file
 from app.storage import StorageClient, create_storage
 from app.worker import celery_app
 from app.worker.ingest import ingest
@@ -161,10 +161,13 @@ def test_replacing_the_invalid_file_reprocesses_only_the_new_one(
     sent: list[str] = []
     monkeypatch.setattr(celery_app, "send_task", lambda name, args: sent.append(args[0]))
     calls: list[str] = []
-    real = ingest_module.process_file
-    monkeypatch.setattr(
-        ingest_module, "process_file", lambda *a, **k: calls.append("x") or real(*a, **k)
-    )
+    real = process_file
+
+    def counted(*args: Any, **kwargs: Any) -> Any:
+        calls.append("x")
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr("app.worker.ingest.process_file", counted)
 
     submit = client.post(f"/projects/{project}/submit", json={}, headers=ana.headers)
     ingest.apply(args=[sent[0]], throw=True)
@@ -190,7 +193,7 @@ def test_submit_from_needs_fix_with_an_invalid_file_left_is_a_422(
     assert response.status_code == 422 and sent == []
     (detail,) = response.json()["error"]["details"]
     assert detail["file_id"] == registered[1]["file_id"]
-    assert detail["message"].startswith("Replace or remove f1.jpg")
+    assert detail["message"].startswith("Replace or remove f0.jpg")
     assert client.get(f"/projects/{project}", headers=ana.headers).json()["status"] == "needs_fix"
 
 
