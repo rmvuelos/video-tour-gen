@@ -2,13 +2,15 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router'
 import { Alert } from '../components/ui/Alert'
 import { PageTitle } from '../components/PageTitle'
+import { Uploader } from '../components/Uploader'
 import { ApiRequestError } from '../lib/api'
 import { getProject, type Project } from '../lib/projects'
 import { useDocumentTitle } from '../lib/use-document-title'
 
 type State = { project: Project } | { error: string } | null
 
-// shortcut: only the name; the uploader (4d) replaces this page and adds the way into it.
+const EDITABLE = new Set(['draft', 'needs_fix'])
+
 function ProjectView({ id }: { id: string }) {
   const [state, setState] = useState<State>(null)
   useDocumentTitle(state && 'project' in state ? state.project.name : 'Project')
@@ -39,7 +41,13 @@ function ProjectView({ id }: { id: string }) {
       <PageTitle className="text-title-lg font-semibold break-words">
         {state.project.name}
       </PageTitle>
-      <p className="text-body text-fg-muted">Uploading assets is coming soon.</p>
+      {EDITABLE.has(state.project.status) ? (
+        <Uploader projectId={state.project.id} />
+      ) : (
+        <p className="text-body text-fg-muted">
+          This project was already sent, so its files can&apos;t be changed.
+        </p>
+      )}
     </div>
   )
 }
