@@ -86,7 +86,8 @@
   --color-action: var(--color-ink);
   --color-action-hover: color-mix(in srgb, var(--color-ink) 85%, var(--color-white));
   --color-focus: var(--color-ink);
-  --opacity-disabled: 0.5;
+  /* A percentage: it serves `opacity` and the color-mix of dimmed (aria-disabled) buttons. */
+  --opacity-disabled: 50%;
 
   /* Type scale (rem at a 16px root); every line height is 130% and tracking 0 in Figma. */
   --text-eyebrow: 0.75rem;
