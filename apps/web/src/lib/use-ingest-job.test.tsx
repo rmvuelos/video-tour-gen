@@ -60,7 +60,7 @@ describe('useIngestJob', () => {
   })
 
   it('stops polling and aborts the request on unmount', async () => {
-    api.getLatestJob.mockResolvedValue(job('queued'))
+    api.getLatestJob.mockReturnValue(new Promise(() => undefined))
     const { unmount } = setup()
     await tick(0)
     const signal = api.getLatestJob.mock.calls[0]![1] as AbortSignal

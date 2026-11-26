@@ -5,6 +5,10 @@ import { getLatestJob, retryIngest, type JobState } from './uploads'
 
 const POLL_MS = 2000
 const MAX_BACKOFF_MS = 30_000
+// A hung request must not pin the loop: give up on it and let the backoff retry.
+const REQUEST_TIMEOUT_MS = 15_000
+// The job or the project is not ours (any more): polling again cannot help.
+const GONE = new Set([403, 404])
 
 /**
  * Polls jobs/latest while the ingest runs. Stops on done/failed (calling `onSettled` once), on
@@ -13,6 +17,8 @@ const MAX_BACKOFF_MS = 30_000
 export function useIngestJob(projectId: string, onSettled: (job: JobState) => void) {
   const [job, setJob] = useState<JobState | null>(null)
   const [failures, setFailures] = useState(0)
+  const [fatal, setFatal] = useState(false)
+  const retryBusy = useRef(false)
   const [retrying, setRetrying] = useState(false)
   const [retryError, setRetryError] = useState<string | null>(null)
   // Bumped by retry to start a new polling loop.
@@ -37,9 +43,18 @@ export function useIngestJob(projectId: string, onSettled: (job: JobState) => vo
       timer = undefined
       if (document.hidden) return // visibilitychange restarts the loop
       busy = true
-      getLatestJob(projectId, ctl.signal).then(
+      const req = new AbortController()
+      const stop = () => req.abort()
+      ctl.signal.addEventListener('abort', stop)
+      const timeout = setTimeout(stop, REQUEST_TIMEOUT_MS)
+      const done = () => {
+        clearTimeout(timeout)
+        ctl.signal.removeEventListener('abort', stop)
+        busy = false
+      }
+      getLatestJob(projectId, req.signal).then(
         (next) => {
-          busy = false
+          done()
           if (ctl.signal.aborted) return
           errors = 0
           setFailures(0)
@@ -49,9 +64,10 @@ export function useIngestJob(projectId: string, onSettled: (job: JobState) => vo
             settled.current(next)
           } else schedule(POLL_MS)
         },
-        () => {
-          busy = false
+        (e: unknown) => {
+          done()
           if (ctl.signal.aborted) return
+          if (e instanceof ApiRequestError && GONE.has(e.status)) return setFatal(true)
           errors += 1
           setFailures(errors)
           schedule(Math.min(POLL_MS * 2 ** errors, MAX_BACKOFF_MS))
@@ -71,6 +87,8 @@ export function useIngestJob(projectId: string, onSettled: (job: JobState) => vo
   }, [projectId, round])
 
   const retry = useCallback(async () => {
+    if (retryBusy.current) return
+    retryBusy.current = true
     setRetrying(true)
     setRetryError(null)
     try {
@@ -78,15 +96,24 @@ export function useIngestJob(projectId: string, onSettled: (job: JobState) => vo
       setJob(null)
       setRound((r) => r + 1)
     } catch (e) {
-      if (scope.current!.signal.aborted) return
-      setRetryError(
-        e instanceof ApiRequestError && e.status === 429
-          ? 'Too many requests. Wait a moment and try again.'
-          : errorCodeMessage(e instanceof ApiRequestError ? e.code : null),
-      )
+      if (scope.current!.signal.aborted) {
+        retryBusy.current = false
+        return
+      }
+      if (e instanceof ApiRequestError && e.code === 'job_not_failed') {
+        // Someone already retried: just follow the new job.
+        setJob(null)
+        setRound((r) => r + 1)
+      } else
+        setRetryError(
+          e instanceof ApiRequestError && e.status === 429
+            ? 'Too many requests. Wait a moment and try again.'
+            : errorCodeMessage(e instanceof ApiRequestError ? e.code : null),
+        )
     }
+    retryBusy.current = false
     setRetrying(false)
   }, [projectId])
 
-  return { job, failures, retrying, retryError, retry }
+  return { job, failures, fatal, retrying, retryError, retry }
 }
