@@ -13,7 +13,7 @@ const TONES = {
 type Props = Omit<ComponentProps<'div'>, 'role' | 'children'> & {
   tone: keyof typeof TONES
   children: ReactNode
-  action?: { label: string; ariaLabel?: string; onClick: () => void }
+  action?: { label: string; ariaLabel?: string; busy?: boolean; onClick: () => void }
 }
 
 /** Errors interrupt (`alert`); info and success wait their turn (`status`). The tone is also text. */
@@ -34,8 +34,9 @@ export function Alert({ tone, action, children, className = '', ...rest }: Props
         <button
           type="button"
           aria-label={action.ariaLabel}
+          aria-disabled={action.busy || undefined}
           onClick={action.onClick}
-          className="min-h-6 cursor-pointer px-2 text-label font-medium text-fg underline"
+          className="min-h-6 cursor-pointer px-2 aria-disabled:cursor-not-allowed aria-disabled:opacity-(--opacity-disabled) text-label font-medium text-fg underline"
         >
           {action.label}
         </button>
