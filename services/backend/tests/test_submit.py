@@ -24,14 +24,15 @@ JOB = {
 }
 
 
-def file_row(kind: str, size: int = 100) -> dict[str, Any]:
+def file_row(kind: str, size: int = 100, status: str = "pending") -> dict[str, Any]:
     fid = uuid.uuid4()
     return {
         "id": fid,
         "kind": kind,
         "size_bytes": size,
         "original_path": f"{USER.id}/{PROJECT_ID}/{fid}",
-        "status": "pending",
+        "original_filename": f"{kind}-{fid.hex[:6]}.jpg",
+        "status": status,
     }
 
 
@@ -190,7 +191,7 @@ def test_a_failed_enqueue_fails_the_job_and_frees_the_project(client: TestClient
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "enqueue_failed"
     assert env.pool.ran("set status = 'failed'") == [(JOB["id"], USER.id)]
-    assert env.pool.ran("set status = 'draft'") == [(PROJECT_ID, USER.id)]
+    assert env.pool.ran("update projects set status = %s") == [("draft", PROJECT_ID, USER.id)]
 
 
 def test_submit_has_its_own_rate_limit(client: TestClient, env: Env) -> None:
@@ -337,7 +338,7 @@ def test_reopening_only_touches_a_project_that_is_still_ingesting(
 
     client.post(URL, json={})
 
-    sql = next(sql for sql, _ in env.pool.calls if "set status = 'draft'" in sql)
+    sql = next(sql for sql, _ in env.pool.calls if "update projects set status = %s" in sql)
     assert "status = 'ingesting'" in sql.split("where")[1]
 
 
@@ -347,3 +348,54 @@ def test_the_publisher_gives_up_quickly_when_redis_is_down(fake_env: None) -> No
     assert celery_app.conf.broker_connection_timeout <= 5
     assert celery_app.conf.broker_transport_options["socket_connect_timeout"] <= 5
     assert celery_app.conf.task_publish_retry_policy["max_retries"] <= 2
+
+
+def needs_fix(env: Env, *rows: dict[str, Any]) -> None:
+    env.pool.answers.clear()
+    env.pool.on("for update", [{"id": PROJECT_ID, "status": "needs_fix"}])
+    env.pool.on("insert into jobs", [JOB])
+    env.files(*rows)
+
+
+def test_a_needs_fix_submit_keeps_valid_files_and_marks_only_the_new_ones(
+    client: TestClient, env: Env
+) -> None:
+    valid = [file_row("plan", status="valid")] + [file_row("photo", status="valid")] * 2
+    fresh = file_row("photo")
+    needs_fix(env, *valid, fresh)
+
+    response = client.post(URL, json={"plan_page_index": 1})
+
+    assert response.status_code == 202
+    assert env.pool.ran("set status = 'uploaded'") == [(fresh["id"], PROJECT_ID, USER.id)]
+    page_sql = next(sql for sql, _ in env.pool.calls if "set page_index" in sql)
+    assert "status = 'uploaded'" in page_sql  # a valid plan keeps the page it was rendered with
+    assert env.sent == [("ingest", [str(JOB["id"])])]
+
+
+def test_a_needs_fix_submit_with_an_invalid_file_names_it_and_creates_nothing(
+    client: TestClient, env: Env
+) -> None:
+    bad = file_row("photo", status="invalid")
+    needs_fix(env, file_row("plan", status="valid"), bad, *[file_row("photo", status="valid")] * 2)
+
+    response = client.post(URL, json={})
+
+    assert response.status_code == 422
+    (detail,) = response.json()["error"]["details"]
+    assert detail["code"] == "invalid_file" and detail["file_id"] == str(bad["id"])
+    assert detail["message"].startswith("Replace or remove ")
+    assert bad["original_filename"] in detail["message"]
+    assert env.pool.ran("insert into jobs") == [] and env.sent == []
+
+
+def test_a_failed_enqueue_from_needs_fix_returns_the_project_to_needs_fix(
+    client: TestClient, env: Env
+) -> None:
+    needs_fix(env, file_row("plan", status="valid"), *[file_row("photo") for _ in range(3)])
+    env.send_error = ConnectionError("redis down")
+
+    response = client.post(URL, json={})
+
+    assert response.status_code == 503
+    assert env.pool.ran("update projects set status = %s") == [("needs_fix", PROJECT_ID, USER.id)]
