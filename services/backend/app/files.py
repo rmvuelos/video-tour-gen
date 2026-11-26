@@ -13,7 +13,8 @@ from app.auth import CurrentUserDep
 from app.db import PoolDep, connection
 from app.errors import ERROR_RESPONSES, ApiError, ErrorDetail
 from app.limits import FileRule, InputLimits, load_input_limits
-from app.ratelimit import FilesLimit
+from app.projects import SELECT_ONE
+from app.ratelimit import FilesLimit, ReadLimit
 from app.storage import DERIVED, ORIGINALS, ObjectStorage, StorageDep
 from app.validation import not_found, parse_id, printable
 
@@ -36,6 +37,11 @@ INSERT = (
 )
 SELECT_FILE = (
     "select id, original_path from project_files where id = %s and project_id = %s and user_id = %s"
+)
+LIST_FILES = (
+    "select id, kind, original_filename, size_bytes, declared_mime, status, error_code, page_index "
+    "from project_files where project_id = %s and user_id = %s "
+    "order by (kind = 'plan') desc, created_at, id"  # same order as jobs.FILES
 )
 DELETE = "delete from project_files where id = %s and project_id = %s and user_id = %s"
 # Rows whose signing failed: they never got a URL, so no object can exist.
@@ -76,6 +82,21 @@ class UploadTarget(BaseModel):
 
 class UploadTargets(BaseModel):
     files: list[UploadTarget]
+
+
+class FileItem(BaseModel):
+    id: UUID
+    kind: Literal["plan", "photo"]
+    filename: str
+    size: int
+    mime: str
+    status: Literal["pending", "uploaded", "valid", "invalid"]
+    error_code: str | None
+    page_index: int | None
+
+
+class FileList(BaseModel):
+    files: list[FileItem]
 
 
 def lock_editable_project(
@@ -213,3 +234,27 @@ def delete_file(
         conn.execute(DELETE, (file_uuid, project_uuid, user.id))
     _remove_objects(storage, path)
     return Response(status_code=204)
+
+
+@router.get("/{project_id}/files")
+def list_files(project_id: str, user: CurrentUserDep, pool: PoolDep, _limit: ReadLimit) -> FileList:
+    project_uuid = parse_id(project_id)
+    with connection(pool) as conn:  # a read: no lock
+        if conn.execute(SELECT_ONE, (project_uuid, user.id)).fetchone() is None:
+            raise not_found()
+        rows = conn.execute(LIST_FILES, (project_uuid, user.id)).fetchall()
+    return FileList(
+        files=[
+            FileItem(
+                id=r["id"],
+                kind=r["kind"],
+                filename=r["original_filename"],
+                size=r["size_bytes"],
+                mime=r["declared_mime"],
+                status=r["status"],
+                error_code=r["error_code"],
+                page_index=r["page_index"],
+            )
+            for r in rows
+        ]
+    )
