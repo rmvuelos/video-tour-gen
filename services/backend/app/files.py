@@ -86,7 +86,9 @@ def lock_editable_project(
         raise not_found()
     if row["status"] not in EDITABLE_STATUSES:
         raise ApiError(
-            409, "project_not_draft", "Files can only change before the project is sent."
+            409,
+            "project_not_editable",
+            "Files can't be changed while the project is being processed.",
         )
 
 

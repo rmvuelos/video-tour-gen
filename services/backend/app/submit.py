@@ -72,7 +72,14 @@ def _note(value: str) -> str:
 class SubmitIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    plan_page_index: Annotated[int | None, Field(ge=0)] = None  # the ingest checks the real count
+    plan_page_index: Annotated[
+        int | None,
+        Field(
+            ge=0,
+            description="PDF page to use as the plan (the ingest checks the real count). "
+            "Ignored if the plan is already valid: replace the plan to change its page.",
+        ),
+    ] = None
     area_m2: Annotated[float | None, Field(gt=0, le=AREA_MAX_M2, allow_inf_nan=False)] = None
     description: (
         Annotated[str, Field(max_length=DESCRIPTION_MAX_CHARS), AfterValidator(_note)] | None
@@ -176,7 +183,9 @@ def _lock_and_find_job(
         outcome = Outcome(Job.model_validate(active), created=False, send=bool(active.get("stale")))
         return project["status"], outcome
     if project["status"] not in EDITABLE_STATUSES:
-        raise ApiError(409, "project_not_draft", "This project was already sent.")
+        raise ApiError(
+            409, "project_not_editable", "This project can't be sent in its current state."
+        )
     return project["status"], None
 
 
