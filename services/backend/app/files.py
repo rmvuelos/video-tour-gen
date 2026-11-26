@@ -24,6 +24,7 @@ MAX_BATCH = 11  # 1 plan + 10 photos
 MB = 1024 * 1024
 # Every query is filtered by user_id: the DB role bypasses RLS (P-5). `for update` serialises
 # concurrent uploads/submits of one project, so the counts below cannot race.
+EDITABLE_STATUSES = ("draft", "needs_fix")  # the only states where files may change
 LOCK = "select id, status from projects where id = %s and user_id = %s for update"
 COUNTS = (
     "select kind, count(*) as n from project_files "
@@ -77,13 +78,17 @@ class UploadTargets(BaseModel):
     files: list[UploadTarget]
 
 
-def lock_draft_project(conn: psycopg.Connection[DictRow], project_id: UUID, user_id: UUID) -> None:
+def lock_editable_project(
+    conn: psycopg.Connection[DictRow], project_id: UUID, user_id: UUID
+) -> None:
     row = conn.execute(LOCK, (project_id, user_id)).fetchone()
     if row is None:  # unknown and foreign look the same (anti-IDOR)
         raise not_found()
-    if row["status"] != "draft":
+    if row["status"] not in EDITABLE_STATUSES:
         raise ApiError(
-            409, "project_not_draft", "Files can only change before the project is sent."
+            409,
+            "project_not_editable",
+            "Files can't be changed while the project is being processed.",
         )
 
 
@@ -142,7 +147,7 @@ def register_files(
     project_uuid = parse_id(project_id)
     planned = [(uuid4(), item) for item in body.files]
     with connection(pool) as conn:  # validate and insert under the lock; no network in here
-        lock_draft_project(conn, project_uuid, user.id)
+        lock_editable_project(conn, project_uuid, user.id)
         counts = conn.execute(COUNTS, (project_uuid, user.id)).fetchall()
         errors = validate(body.files, {row["kind"]: row["n"] for row in counts})
         if errors:
@@ -200,7 +205,7 @@ def delete_file(
 ) -> Response:
     project_uuid, file_uuid = parse_id(project_id), parse_id(file_id, "File")
     with connection(pool) as conn:
-        lock_draft_project(conn, project_uuid, user.id)
+        lock_editable_project(conn, project_uuid, user.id)
         row = conn.execute(SELECT_FILE, (file_uuid, project_uuid, user.id)).fetchone()
         if row is None:
             raise not_found("File")

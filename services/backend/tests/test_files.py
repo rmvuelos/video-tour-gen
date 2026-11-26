@@ -129,14 +129,37 @@ def test_unknown_foreign_or_malformed_project_is_404(client: TestClient, pool: F
     assert pool.ran("for update")[0] == (PROJECT_ID, USER.id)
 
 
-def test_only_draft_projects_accept_files(client: TestClient, pool: FakePool) -> None:
+@pytest.mark.parametrize("status", ["ingesting", "ready"])
+def test_only_editable_projects_accept_files(
+    client: TestClient, pool: FakePool, status: str
+) -> None:
     pool.answers.clear()
-    pool.on("for update", [{"id": PROJECT_ID, "status": "ingesting"}])
+    pool.on("for update", [{"id": PROJECT_ID, "status": status}])
 
     response = client.post(URL, json={"files": [photo()]})
 
     assert response.status_code == 409
-    assert response.json()["error"]["code"] == "project_not_draft"
+    assert response.json()["error"]["code"] == "project_not_editable"
+
+
+def test_a_needs_fix_project_accepts_files_counting_the_ones_that_remain(
+    client: TestClient, pool: FakePool
+) -> None:
+    pool.answers.clear()
+    pool.on("for update", [{"id": PROJECT_ID, "status": "needs_fix"}])
+    pool.on_sequence(
+        "group by kind",
+        [{"kind": "plan", "n": 1}, {"kind": "photo", "n": 10}],
+        [{"kind": "plan", "n": 1}, {"kind": "photo", "n": 9}],
+    )
+
+    full = client.post(URL, json={"files": [photo()]})
+    room = client.post(URL, json={"files": [photo()]})
+
+    assert full.status_code == 422
+    assert full.json()["error"]["details"][0]["code"] == "too_many_files"
+    assert room.status_code == 201
+    assert len(pool.ran("insert into project_files")) == 1
 
 
 def test_delete_removes_the_objects_and_the_row(
@@ -164,14 +187,32 @@ def test_delete_of_a_file_that_is_not_yours_is_404_and_touches_nothing(
     assert client.delete(f"{URL}/not-a-uuid").status_code == 404
 
 
-def test_delete_only_in_draft(client: TestClient, pool: FakePool, storage: FakeStorage) -> None:
+@pytest.mark.parametrize("status", ["ingesting", "ready"])
+def test_delete_only_when_editable(
+    client: TestClient, pool: FakePool, storage: FakeStorage, status: str
+) -> None:
     pool.answers.clear()
-    pool.on("for update", [{"id": PROJECT_ID, "status": "ingesting"}])
+    pool.on("for update", [{"id": PROJECT_ID, "status": status}])
 
     response = client.delete(f"{URL}/{uuid.uuid4()}")
 
     assert response.status_code == 409
     assert storage.deleted == []
+
+
+def test_a_needs_fix_project_can_delete_a_file_and_its_derivatives(
+    client: TestClient, pool: FakePool, storage: FakeStorage
+) -> None:
+    file_id = uuid.uuid4()
+    path = f"{USER.id}/{PROJECT_ID}/{file_id}"
+    pool.answers.clear()
+    pool.on("for update", [{"id": PROJECT_ID, "status": "needs_fix"}])
+    pool.on("from project_files", [{"id": file_id, "original_path": path}])
+
+    response = client.delete(f"{URL}/{file_id}")
+
+    assert response.status_code == 204
+    assert storage.deleted == [("originals", [path])] and storage.prefixes == [("derived", path)]
 
 
 def test_storage_is_never_called_while_the_project_lock_is_held(
