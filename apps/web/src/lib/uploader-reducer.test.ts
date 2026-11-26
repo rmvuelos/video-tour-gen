@@ -47,7 +47,7 @@ describe('uploaderReducer', () => {
       { type: 'failed', id: 'h', error: 'nope' },
     )
     expect(s.items[1]).toMatchObject({ status: 'failed', error: 'nope' })
-    expect(s.announcement).toBe('hall.jpg failed. 1 of 10 uploaded')
+    expect(s.announcement).toBe('hall.jpg failed to upload. Retry or remove it.')
   })
 
   it('ignores a failure for an item that is gone', () => {
@@ -70,6 +70,33 @@ describe('uploaderReducer', () => {
     const back = reduce(removed, { type: 'restore', item: item('b'), index: 1, error: 'cannot' })
     expect(back.items.map((i) => i.id)).toEqual(['a', 'b', 'c'])
     expect(back.error).toBe('cannot')
+  })
+
+  it('puts an item that was uploading back as failed, without progress', () => {
+    const s = reduce(withItems(), {
+      type: 'restore',
+      item: item('a', { progress: 0.4 }),
+      index: 0,
+      error: 'cannot',
+    })
+    expect(s.items[0]).toMatchObject({ status: 'failed', progress: undefined })
+    expect(s.items[0]?.error).toBeTruthy()
+  })
+
+  it('counts files being registered per kind until they settle', () => {
+    let s = reduce(initialState, { type: 'registering', kind: 'photo', count: 3 })
+    expect(s.registering).toEqual({ plan: 0, photo: 3 })
+    s = reduce(s, { type: 'registerEnded', kind: 'photo', count: 3 })
+    expect(s.registering).toEqual({ plan: 0, photo: 0 })
+  })
+
+  it('changes the text when the same announcement repeats, so it is read again', () => {
+    const once = reduce(initialState, { type: 'announce', text: 'x' })
+    const twice = reduce(once, { type: 'announce', text: 'x' })
+    const thrice = reduce(twice, { type: 'announce', text: 'x' })
+    expect(twice.announcement).not.toBe(once.announcement)
+    expect(twice.announcement.trim()).toBe('x')
+    expect(thrice.announcement).toBe(once.announcement)
   })
 
   it('sets the hook error and the announcement', () => {

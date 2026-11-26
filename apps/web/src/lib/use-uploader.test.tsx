@@ -159,7 +159,7 @@ describe('useUploader add', () => {
       status: 'failed',
       error: 'Could not reach the server. Check your connection and retry.',
     })
-    expect(result.current.announcement).toBe('hall.jpg failed. 0 of 10 uploaded')
+    expect(result.current.announcement).toBe('hall.jpg failed to upload. Retry or remove it.')
     await act(async () => {
       void result.current.retry('n1')
     })
@@ -241,6 +241,156 @@ describe('useUploader remove', () => {
     await act(async () => result.current.remove('a'))
     expect(result.current.items).toEqual([])
     expect(result.current.error).toBeNull()
+  })
+})
+
+const expire = () => new PutUploadError('http_error', 'x', 403)
+
+/** Makes the next registerFiles wait until the returned function is called. */
+function holdNextRegister() {
+  const original = api.registerFiles.getMockImplementation()!
+  const gate: { release?: () => void } = {}
+  api.registerFiles.mockImplementationOnce(async (...args: unknown[]) => {
+    await new Promise<void>((resolve) => (gate.release = resolve))
+    return original(...args)
+  })
+  return async () => {
+    await waitFor(() => expect(gate.release).toBeDefined())
+    await act(async () => gate.release!())
+  }
+}
+
+describe('useUploader re-registering after an expired URL', () => {
+  async function failedWithExpiredUrl() {
+    const hook = await setup()
+    await act(async () => {
+      void hook.result.current.add('photo', [photo('a.jpg')])
+    })
+    await act(async () => puts[0]!.reject(expire()))
+    return hook
+  }
+
+  it('does not upload a file removed while it is registered again', async () => {
+    const { result } = await failedWithExpiredUrl()
+    await act(async () => {
+      void result.current.retry('n1')
+    })
+    const release = holdNextRegister()
+    await act(async () => puts[1]!.reject(expire()))
+    await act(async () => {
+      result.current.remove('n1')
+    })
+    await release()
+    expect(api.putUpload).toHaveBeenCalledTimes(2)
+    expect(api.deleteFile).toHaveBeenCalledWith('p1', 'n2')
+    expect(result.current.items).toEqual([])
+  })
+
+  it('goes straight to register on the next retry when register failed after the delete', async () => {
+    const { result } = await failedWithExpiredUrl()
+    api.registerFiles.mockRejectedValueOnce(new ApiRequestError(500, 'internal_error', 'x'))
+    await act(async () => {
+      void result.current.retry('n1')
+    })
+    await act(async () => puts[1]!.reject(expire()))
+    expect(result.current.items[0]).toMatchObject({ id: 'n1', status: 'failed' })
+    await act(async () => {
+      void result.current.retry('n1')
+    })
+    await waitFor(() => expect(api.putUpload).toHaveBeenCalledTimes(3))
+    expect(api.putUpload.mock.calls[2]![0]).toBe('https://s/2')
+    expect(api.deleteFile).toHaveBeenCalledTimes(1)
+    expect(result.current.items[0]?.id).toBe('n2')
+  })
+
+  it('treats a 404 on the delete as done and registers again', async () => {
+    const { result } = await failedWithExpiredUrl()
+    api.deleteFile.mockRejectedValueOnce(new ApiRequestError(404, 'not_found', 'x'))
+    await act(async () => {
+      void result.current.retry('n1')
+    })
+    await act(async () => puts[1]!.reject(expire()))
+    await waitFor(() => expect(result.current.items[0]?.id).toBe('n2'))
+  })
+})
+
+describe('useUploader races and announcements', () => {
+  it('counts files being registered against the slots', async () => {
+    const { result } = await setup(Array.from({ length: 8 }, (_, i) => serverFile(`s${i}`)))
+    const release = holdNextRegister()
+    await act(async () => {
+      void result.current.add('photo', [photo('a.jpg'), photo('b.jpg')])
+    })
+    expect(result.current.slots.photo).toBe(0)
+    await release()
+    expect(result.current.items).toHaveLength(10)
+    expect(result.current.slots.photo).toBe(0)
+  })
+
+  it('frees the slots again when the register fails', async () => {
+    api.registerFiles.mockRejectedValueOnce(new ApiRequestError(409, 'project_not_editable', 'x'))
+    const { result } = await setup()
+    await act(async () => result.current.add('photo', [photo('a.jpg')]))
+    expect(result.current.slots.photo).toBe(10)
+  })
+
+  it('ignores a register that answers after the project changed', async () => {
+    api.listFiles.mockResolvedValue({ files: [] })
+    const hook = renderHook(({ id }) => useUploader(id), { initialProps: { id: 'p1' } })
+    await waitFor(() => expect(hook.result.current.phase).toBe('ready'))
+    const release = holdNextRegister()
+    await act(async () => {
+      void hook.result.current.add('photo', [photo('a.jpg')])
+    })
+    hook.rerender({ id: 'p2' })
+    await waitFor(() => expect(hook.result.current.phase).toBe('ready'))
+    await release()
+    expect(hook.result.current.items).toEqual([])
+    expect(api.putUpload).not.toHaveBeenCalled()
+  })
+
+  it('puts an in-flight upload back as failed, and retryable, when its delete fails', async () => {
+    api.deleteFile.mockRejectedValue(new ApiRequestError(500, 'internal_error', 'x'))
+    const { result } = await setup()
+    await act(async () => {
+      void result.current.add('photo', [photo('a.jpg')])
+    })
+    await act(async () => {
+      result.current.remove('n1')
+    })
+    expect(result.current.items[0]).toMatchObject({ id: 'n1', status: 'failed' })
+    await act(async () => {
+      void result.current.retry('n1')
+    })
+    expect(api.putUpload).toHaveBeenCalledTimes(2)
+    expect(api.putUpload.mock.calls[1]![0]).toBe('https://s/1')
+    await act(async () => puts[1]!.resolve())
+    expect(result.current.items[0]?.status).toBe('pending')
+  })
+
+  it('says how many files failed once, when several fail in one drop', async () => {
+    api.putUpload.mockRejectedValue(new PutUploadError('network_error', 'x'))
+    const { result } = await setup()
+    await act(async () =>
+      result.current.add('photo', [photo('a.jpg'), photo('b.jpg'), photo('c.jpg')]),
+    )
+    expect(result.current.announcement.trim()).toBe('3 files failed to upload.')
+  })
+
+  it('warns before leaving the page while something uploads', async () => {
+    const { result } = await setup()
+    const leave = () => {
+      const event = new Event('beforeunload', { cancelable: true })
+      window.dispatchEvent(event)
+      return event.defaultPrevented
+    }
+    expect(leave()).toBe(false)
+    await act(async () => {
+      void result.current.add('photo', [photo('a.jpg')])
+    })
+    expect(leave()).toBe(true)
+    await act(async () => puts[0]!.resolve())
+    expect(leave()).toBe(false)
   })
 })
 
