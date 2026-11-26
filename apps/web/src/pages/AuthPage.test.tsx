@@ -1,11 +1,13 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router'
+import { StrictMode } from 'react'
+import { MemoryRouter, Route, Routes } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 type Listener = (event: string, session: object | null) => void
 const auth = vi.hoisted(() => ({
   listener: null as Listener | null,
+  silent: false,
   signInWithPassword: vi.fn(),
   signUp: vi.fn(),
   signOut: vi.fn(),
@@ -18,7 +20,7 @@ vi.mock('../lib/supabase', () => ({
       signOut: auth.signOut,
       onAuthStateChange: (cb: Listener) => {
         auth.listener = cb
-        cb('INITIAL_SESSION', null)
+        if (!auth.silent) cb('INITIAL_SESSION', null)
         return { data: { subscription: { unsubscribe: () => undefined } } }
       },
     },
@@ -27,6 +29,10 @@ vi.mock('../lib/supabase', () => ({
 
 import { SessionProvider } from '../auth/session'
 import { App } from '../App'
+import { AuthPage } from './AuthPage'
+
+const emit = (event: string, session: object | null) =>
+  act(async () => auth.listener?.(event, session))
 
 const OK = { data: { session: { user: {} } }, error: null }
 const BAD = { data: { session: null }, error: { code: 'invalid_credentials', message: 'x' } }
@@ -43,10 +49,8 @@ function renderAt(path: string, state?: unknown) {
 
 beforeEach(() => {
   vi.resetAllMocks()
-  auth.signOut.mockImplementation(async () => {
-    auth.listener?.('SIGNED_OUT', null)
-    return { error: null }
-  })
+  auth.silent = false
+  auth.signOut.mockResolvedValue({ error: null })
 })
 
 async function fill(email: string, password: string) {
@@ -58,17 +62,15 @@ async function fill(email: string, password: string) {
 
 describe('/login', () => {
   it('signs in and returns to the route the user asked for', async () => {
-    auth.signInWithPassword.mockImplementation(async () => {
-      auth.listener?.('SIGNED_IN', { user: {} })
-      return OK
-    })
-    renderAt('/login', { from: { pathname: '/' } })
+    auth.signInWithPassword.mockResolvedValue(OK)
+    renderAt('/login', { from: '/' })
     const user = await fill('a@b.test', 'secret1')
     await user.click(screen.getByRole('button', { name: 'Sign in' }))
     expect(auth.signInWithPassword).toHaveBeenCalledWith({
       email: 'a@b.test',
       password: 'secret1',
     })
+    await emit('SIGNED_IN', { user: {} })
     expect(await screen.findByRole('heading', { name: 'rooma' })).toBeInTheDocument()
   })
 
@@ -87,7 +89,9 @@ describe('/login', () => {
     renderAt('/login')
     const user = await fill('a@b.test', 'secret1')
     await user.click(screen.getByRole('button', { name: 'Sign in' }))
-    expect(await screen.findByRole('button', { name: 'Signing in…' })).toBeDisabled()
+    const button = await screen.findByRole('button', { name: 'Signing in…' })
+    expect(button).toHaveAttribute('aria-disabled', 'true')
+    expect(button).toHaveFocus()
   })
 
   it('reports empty fields next to the field, focuses the first one and does not call Supabase', async () => {
@@ -120,13 +124,11 @@ describe('/login', () => {
 
 describe('/signup', () => {
   it('creates the account and enters the app', async () => {
-    auth.signUp.mockImplementation(async () => {
-      auth.listener?.('SIGNED_IN', { user: {} })
-      return OK
-    })
+    auth.signUp.mockResolvedValue(OK)
     renderAt('/signup')
     const user = await fill('new@b.test', 'secret1')
     await user.click(screen.getByRole('button', { name: 'Create account' }))
+    await emit('SIGNED_IN', { user: {} })
     expect(await screen.findByRole('heading', { name: 'rooma' })).toBeInTheDocument()
   })
 
@@ -160,13 +162,148 @@ describe('/signup', () => {
   })
 })
 
+function renderWithProjects(from: unknown) {
+  return render(
+    <MemoryRouter initialEntries={[{ pathname: '/login', state: { from } }]}>
+      <SessionProvider>
+        <Routes>
+          <Route path="/login" element={<AuthPage mode="login" />} />
+          <Route path="/projects" element={<h1>Projects page</h1>} />
+          <Route path="/" element={<h1>Home page</h1>} />
+        </Routes>
+      </SessionProvider>
+    </MemoryRouter>,
+  )
+}
+
+async function signInAt(from: unknown) {
+  auth.signInWithPassword.mockResolvedValue(OK)
+  renderWithProjects(from)
+  const user = await fill('a@b.test', 'secret1')
+  await user.click(screen.getByRole('button', { name: 'Sign in' }))
+  await emit('SIGNED_IN', { user: {} })
+}
+
+describe('return after signing in', () => {
+  it('goes back to the requested route with its query and hash', async () => {
+    await signInAt('/projects?tab=2#top')
+    expect(await screen.findByRole('heading', { name: 'Projects page' })).toBeInTheDocument()
+  })
+
+  it.each(['//evil.test', 'https://evil.test'])('ignores the external target %s', async (from) => {
+    await signInAt(from)
+    expect(await screen.findByRole('heading', { name: 'Home page' })).toBeInTheDocument()
+  })
+})
+
+describe('page state', () => {
+  it('shows only the loading status, not the form, until the session is known', () => {
+    auth.silent = true // Supabase has not answered yet: it subscribes without emitting.
+    render(
+      <MemoryRouter initialEntries={['/login']}>
+        <SessionProvider>
+          <AuthPage mode="login" />
+        </SessionProvider>
+      </MemoryRouter>,
+    )
+    expect(screen.getByRole('status')).toHaveTextContent('Loading')
+    expect(screen.queryByLabelText(/Email/)).not.toBeInTheDocument()
+  })
+
+  it('does not carry the notice or the typed values from signup to login', async () => {
+    auth.signUp.mockResolvedValue({ data: { session: null }, error: null })
+    renderAt('/signup')
+    const user = await fill('new@b.test', 'secret1')
+    await user.click(screen.getByRole('button', { name: 'Create account' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('Check your email')
+    await user.click(screen.getByRole('link', { name: 'Sign in' }))
+    expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(screen.getByLabelText(/Email/)).toHaveValue('')
+    expect(screen.getByLabelText(/Password/)).toHaveValue('')
+  })
+
+  it('clears an old notice when the form is sent again', async () => {
+    auth.signUp.mockResolvedValueOnce({ data: { session: null }, error: null })
+    renderAt('/signup')
+    const user = await fill('new@b.test', 'secret1')
+    await user.click(screen.getByRole('button', { name: 'Create account' }))
+    expect(await screen.findByRole('status')).toBeInTheDocument()
+    auth.signUp.mockReturnValue(new Promise(() => undefined))
+    await user.click(screen.getByRole('button', { name: 'Create account' }))
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument())
+  })
+
+  it('works under StrictMode, which subscribes twice', async () => {
+    auth.signInWithPassword.mockResolvedValue(OK)
+    render(
+      <StrictMode>
+        <MemoryRouter initialEntries={['/login']}>
+          <SessionProvider>
+            <App />
+          </SessionProvider>
+        </MemoryRouter>
+      </StrictMode>,
+    )
+    const user = await fill('a@b.test', 'secret1')
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+    await emit('SIGNED_IN', { user: {} })
+    expect(await screen.findByRole('heading', { name: 'rooma' })).toBeInTheDocument()
+  })
+})
+
+describe('submitting', () => {
+  it('sends once when the button is pressed twice, and keeps the focus on it', async () => {
+    auth.signInWithPassword.mockReturnValue(new Promise(() => undefined))
+    renderAt('/login')
+    const user = await fill('a@b.test', 'secret1')
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+    const button = await screen.findByRole('button', { name: 'Signing in…' })
+    await user.click(button)
+    await user.keyboard('{Enter}')
+    expect(auth.signInWithPassword).toHaveBeenCalledOnce()
+    expect(button).toHaveFocus()
+  })
+
+  it('trims the email before sending it', async () => {
+    auth.signInWithPassword.mockResolvedValue(BAD)
+    renderAt('/login')
+    const user = await fill('  a@b.test  ', 'secret1')
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+    expect(auth.signInWithPassword).toHaveBeenCalledWith({ email: 'a@b.test', password: 'secret1' })
+  })
+
+  it('tells an invalid email from an empty one', async () => {
+    renderAt('/login')
+    const user = await fill('not-an-email', 'secret1')
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+    expect(screen.getByLabelText(/Email/)).toHaveAccessibleDescription(/valid email/i)
+  })
+
+  it.each([
+    ['email_not_confirmed', 400, 'Confirm your email first, then sign in.'],
+    ['over_request_rate_limit', 429, 'Too many attempts. Wait a minute and try again.'],
+    ['anything', 429, 'Too many attempts. Wait a minute and try again.'],
+  ])('maps %s (%i) to its own message', async (code, status, text) => {
+    auth.signInWithPassword.mockResolvedValue({
+      data: { session: null },
+      error: { code, status, message: 'x' },
+    })
+    renderAt('/login')
+    const user = await fill('a@b.test', 'secret1')
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(text)
+  })
+})
+
 describe('logout', () => {
   it('signs out from the home page and goes back to the sign-in page', async () => {
     renderAt('/login')
-    auth.listener?.('SIGNED_IN', { user: {} })
+    await emit('SIGNED_IN', { user: {} })
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: 'Sign out' }))
-    await waitFor(() => expect(auth.signOut).toHaveBeenCalledOnce())
+    await waitFor(() => expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' }))
+    await emit('SIGNED_OUT', null)
     expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
   })
 })
