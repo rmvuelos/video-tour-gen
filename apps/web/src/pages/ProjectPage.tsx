@@ -3,6 +3,7 @@ import { useParams } from 'react-router'
 import { Alert } from '../components/ui/Alert'
 import { PageTitle } from '../components/PageTitle'
 import { IngestStatus } from '../components/IngestStatus'
+import { UploadHeader } from '../components/UploadHeader'
 import { Uploader } from '../components/Uploader'
 import { ApiRequestError } from '../lib/api'
 import { getProject, type Project } from '../lib/projects'
@@ -50,13 +51,17 @@ function ProjectBody({
     return <ReadyView />
   }
   return (
-    <Uploader
-      key={project.id}
-      projectId={project.id}
-      initial={{ area_m2: project.area_m2, description: project.description }}
-      onSubmitted={onSubmitted}
-      onNotEditable={onNotEditable}
-    />
+    <>
+      <UploadHeader />
+      <Uploader
+        key={project.id}
+        projectId={project.id}
+        projectName={project.name}
+        initial={{ area_m2: project.area_m2, description: project.description }}
+        onSubmitted={onSubmitted}
+        onNotEditable={onNotEditable}
+      />
+    </>
   )
 }
 
@@ -127,9 +132,11 @@ function ProjectView({ id }: { id: string }) {
         Loading project…
       </p>
     )
+  const editing = state.project.status === 'draft' || state.project.status === 'needs_fix'
   return (
-    <div className="flex flex-col gap-6">
-      <PageTitle className="text-title-lg font-semibold break-words">
+    <div className="flex flex-col gap-hero">
+      {/* In the upload view the name is shown in the overview card: the h1 is for assistive tech. */}
+      <PageTitle className={`break-words ${editing ? 'sr-only' : 'text-title-lg font-semibold'}`}>
         {state.project.name}
       </PageTitle>
       <ProjectBody
