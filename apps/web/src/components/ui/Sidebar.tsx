@@ -187,8 +187,10 @@ export function Sidebar({ current, hrefs, user, onNavigate, className = '', ...r
       <div aria-hidden="true" className="ml-2.25 mr-3 mt-7 h-px bg-line" />
       <div className="mt-6.5 flex items-center gap-3 px-3.25">
         <Avatar initials={user.initials} aria-hidden="true" />
-        <div className="flex flex-col">
-          <span className="text-stage font-semibold">{user.name}</span>
+        <div className="flex min-w-0 flex-col">
+          <span title={user.name} className="truncate text-stage font-semibold">
+            {user.name}
+          </span>
           <span className="text-eyebrow text-fg-muted">Personal workspace</span>
         </div>
       </div>
