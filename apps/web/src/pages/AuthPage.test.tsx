@@ -71,7 +71,7 @@ describe('/login', () => {
       password: 'secret1',
     })
     await emit('SIGNED_IN', { user: {} })
-    expect(await screen.findByRole('heading', { name: 'rooma' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeInTheDocument()
   })
 
   it('shows one generic message that never says whether the email exists, and focuses it', async () => {
@@ -129,7 +129,7 @@ describe('/signup', () => {
     const user = await fill('new@b.test', 'secret1')
     await user.click(screen.getByRole('button', { name: 'Create account' }))
     await emit('SIGNED_IN', { user: {} })
-    expect(await screen.findByRole('heading', { name: 'rooma' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeInTheDocument()
   })
 
   it('rejects a short password before calling Supabase', async () => {
@@ -248,7 +248,7 @@ describe('page state', () => {
     const user = await fill('a@b.test', 'secret1')
     await user.click(screen.getByRole('button', { name: 'Sign in' }))
     await emit('SIGNED_IN', { user: {} })
-    expect(await screen.findByRole('heading', { name: 'rooma' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeInTheDocument()
   })
 })
 

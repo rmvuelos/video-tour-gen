@@ -29,9 +29,9 @@ function renderAt(path: string) {
 }
 
 describe('App', () => {
-  it('renders the rooma name as the main heading for a signed-in user', () => {
+  it('renders the home page inside the shell for a signed-in user', () => {
     renderAt('/')
-    expect(screen.getByRole('heading', { name: 'rooma' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Welcome back' })).toBeInTheDocument()
   })
 })
 
