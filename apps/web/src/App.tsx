@@ -1,9 +1,8 @@
 import { lazy, Suspense } from 'react'
 import { Route, Routes } from 'react-router'
 import { RequireAuth } from './auth/RequireAuth'
-import { Button } from './components/ui/Button'
+import { AppShell } from './layout/AppShell'
 import { useDocumentTitle } from './lib/use-document-title'
-import { getSupabase } from './lib/supabase'
 import { AuthPage } from './pages/AuthPage'
 import { NotFound } from './pages/NotFound'
 
@@ -14,17 +13,7 @@ const UiGallery = galleryEnabled ? lazy(() => import('./dev/UiGallery')) : null
 
 function Home() {
   useDocumentTitle('Home')
-  return (
-    <main className="flex items-center justify-between p-8">
-      <h1 className="text-title font-semibold">rooma</h1>
-      <Button
-        variant="secondary"
-        onClick={() => void getSupabase().auth.signOut({ scope: 'local' })}
-      >
-        Sign out
-      </Button>
-    </main>
-  )
+  return <h1 className="text-title font-semibold">Welcome back</h1>
 }
 
 export function App() {
@@ -43,7 +32,9 @@ export function App() {
         />
       )}
       <Route element={<RequireAuth />}>
-        <Route path="/" element={<Home />} />
+        <Route element={<AppShell />}>
+          <Route path="/" element={<Home />} />
+        </Route>
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>

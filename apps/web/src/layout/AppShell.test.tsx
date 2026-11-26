@@ -38,7 +38,7 @@ describe('AppShell', () => {
   it('shows the signed-in user at the foot of the sidebar', () => {
     renderAt('/projects')
     expect(screen.getByText('adri.martin')).toBeInTheDocument()
-    expect(screen.getAllByText('AM').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('AD').length).toBeGreaterThan(0)
   })
 
   it('marks My projects as the current page on the list', () => {
