@@ -50,7 +50,7 @@ async function mockBackend(page: Page, { outcome = 'ready', uploadBase }: Option
     [SESSION_KEY, SESSION],
   )
   const rows: Row[] = []
-  const seen = { registers: 0, submit: undefined as unknown, polls: 0 }
+  const seen = { registers: 0, submits: 0, submit: undefined as unknown, polls: 0 }
   let status = 'draft'
   const project = () => ({
     id: 'p1',
@@ -89,6 +89,7 @@ async function mockBackend(page: Page, { outcome = 'ready', uploadBase }: Option
       return json(201, { files: targets })
     }
     if (pathname === '/projects/p1/submit' && method === 'POST') {
+      seen.submits += 1
       seen.submit = request.postDataJSON()
       status = 'ingesting'
       return json(202, { id: 'j1', project_id: 'p1', status: 'queued', created_at: '' })
@@ -135,7 +136,7 @@ async function addAll(page: Page) {
   await expect(page.getByText(/Uploaded$/)).toHaveCount(4)
 }
 
-const send = (page: Page) => page.getByRole('button', { name: 'Continue to preflight' })
+const send = (page: Page) => page.getByRole('button', { name: 'Check my files' })
 
 test('uploads a plan and photos, sends the details and follows the ingest to ready', async ({
   page,
@@ -155,8 +156,11 @@ test('uploads a plan and photos, sends the details and follows the ingest to rea
   if (shotsDir) await page.screenshot({ path: `${shotsDir}/uploader-4d.png` })
   await send(page).dblclick()
 
-  await expect(page.getByText('Checking your files…').first()).toBeVisible()
-  await expect(page.getByText('Your files are ready.')).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole('heading', { name: 'Checking your files' })).toBeFocused()
+  await expect(page.getByRole('heading', { name: 'Your files are ready' })).toBeFocused({
+    timeout: 15_000,
+  })
+  expect(seen.submits).toBe(1) // the double click sent one request
   expect(seen.submit).toEqual({
     plan_page_index: 0,
     area_m2: 85.5,
