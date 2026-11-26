@@ -23,6 +23,14 @@ describe('Sidebar', () => {
     expect(screen.getByText('Personal workspace')).toBeInTheDocument()
   })
 
+  it('truncates a long user name and keeps it readable in the title', () => {
+    const name = 'a.very.long.address.that.would.overflow.the.sidebar'
+    render(<Sidebar current="upload" hrefs={HREFS} user={{ name, initials: 'AV' }} />)
+    const label = screen.getByText(name)
+    expect(label).toHaveAttribute('title', name)
+    expect(label).toHaveClass('truncate')
+  })
+
   it('marks only the current section with aria-current and lets both live links navigate', async () => {
     const { onNavigate, user } = setup('upload')
     const upload = screen.getByRole('link', { name: /Upload assets/ })
