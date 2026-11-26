@@ -16,6 +16,7 @@ from PIL import Image
 
 from app.storage import StorageClient, create_storage
 from app.worker import celery_app
+import app.worker.ingest as ingest_module
 from app.worker.ingest import ingest
 from tests.conftest import Account
 from tests.ingest_fixtures import encrypted_pdf_bytes, image_bytes, pdf_bytes
@@ -120,3 +121,92 @@ def test_hostile_files_are_invalid_with_a_code(
         ("valid", None),
     ]
     assert client.get(f"/projects/{project}", headers=ana.headers).json()["status"] == "needs_fix"
+
+
+def derived(
+    storage: StorageClient, user: Account, project: str, file: dict[str, Any]
+) -> bytes | None:
+    ext = "png" if file["kind"] == "plan" else "jpg"
+    return storage.download("derived", f"{user.id}/{project}/{file['id']}/main.{ext}", CAP)
+
+
+def needs_fix_project(
+    client: TestClient, user: Account, mp: pytest.MonkeyPatch
+) -> tuple[str, dict[str, Any], list[Any]]:
+    photos = [b"not an image", image_bytes("JPEG"), image_bytes("PNG")]
+    return run_project(client, user, pdf_bytes(3), photos, mp)
+
+
+def test_replacing_the_invalid_file_reprocesses_only_the_new_one(
+    client: TestClient,
+    make_user: Callable[[], Account],
+    monkeypatch: pytest.MonkeyPatch,
+    storage: StorageClient,
+) -> None:
+    ana = make_user()
+    project, latest, registered = needs_fix_project(client, ana, monkeypatch)
+    assert client.get(f"/projects/{project}", headers=ana.headers).json()["status"] == "needs_fix"
+    kept = [f for f in latest["files"] if f["status"] == "valid"]
+    before = [derived(storage, ana, project, f) for f in kept]
+    assert all(before)
+    base = f"/projects/{project}/files"
+
+    gone = client.delete(f"{base}/{registered[1]['file_id']}", headers=ana.headers)
+    assert gone.status_code == 204
+    data = image_bytes("JPEG", (80, 60))
+    item = {"kind": "photo", "filename": "n.jpg", "size": len(data), "mime": "image/jpeg"}
+    target = client.post(base, json={"files": [item]}, headers=ana.headers).json()["files"][0]
+    url = target["upload_url"].replace("127.0.0.1", "host.docker.internal")
+    httpx.put(url, headers=target["headers"], content=data, timeout=TIMEOUT).raise_for_status()
+    sent: list[str] = []
+    monkeypatch.setattr(celery_app, "send_task", lambda name, args: sent.append(args[0]))
+    calls: list[str] = []
+    real = ingest_module.process_file
+    monkeypatch.setattr(
+        ingest_module, "process_file", lambda *a, **k: calls.append("x") or real(*a, **k)
+    )
+
+    submit = client.post(f"/projects/{project}/submit", json={}, headers=ana.headers)
+    ingest.apply(args=[sent[0]], throw=True)
+
+    assert submit.status_code == 202 and len(sent) == 1
+    after = client.get(f"/projects/{project}/jobs/latest", headers=ana.headers).json()
+    assert after["status"] == "done" and [f["status"] for f in after["files"]] == ["valid"] * 4
+    assert calls == ["x"]  # only the new photo went through the sandbox
+    assert [derived(storage, ana, project, f) for f in kept] == before
+    assert client.get(f"/projects/{project}", headers=ana.headers).json()["status"] == "ready"
+
+
+def test_submit_from_needs_fix_with_an_invalid_file_left_is_a_422(
+    client: TestClient, make_user: Callable[[], Account], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ana = make_user()
+    project, _, registered = needs_fix_project(client, ana, monkeypatch)
+    sent: list[str] = []
+    monkeypatch.setattr(celery_app, "send_task", lambda name, args: sent.append(args[0]))
+
+    response = client.post(f"/projects/{project}/submit", json={}, headers=ana.headers)
+
+    assert response.status_code == 422 and sent == []
+    (detail,) = response.json()["error"]["details"]
+    assert detail["file_id"] == registered[1]["file_id"]
+    assert detail["message"].startswith("Replace or remove f1.jpg")
+    assert client.get(f"/projects/{project}", headers=ana.headers).json()["status"] == "needs_fix"
+
+
+def test_deleting_a_valid_file_also_deletes_its_derivatives(
+    client: TestClient,
+    make_user: Callable[[], Account],
+    monkeypatch: pytest.MonkeyPatch,
+    storage: StorageClient,
+) -> None:
+    ana = make_user()
+    project, latest, registered = needs_fix_project(client, ana, monkeypatch)
+    valid = next(f for f in latest["files"] if f["id"] == registered[2]["file_id"])
+    assert derived(storage, ana, project, valid)
+
+    gone = client.delete(f"/projects/{project}/files/{valid['id']}", headers=ana.headers)
+
+    assert gone.status_code == 204 and derived(storage, ana, project, valid) is None
+    thumb = f"{ana.id}/{project}/{valid['id']}/thumb.jpg"
+    assert storage.download("derived", thumb, CAP) is None
