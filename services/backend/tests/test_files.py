@@ -295,7 +295,8 @@ def _row(**over: Any) -> dict[str, Any]:
 
 @pytest.fixture
 def lister(client: TestClient, pool: FakePool) -> TestClient:
-    app.dependency_overrides[read_limiter] = lambda: RateLimiter(1000, 60)
+    generous = RateLimiter(1000, 60)
+    app.dependency_overrides[read_limiter] = lambda: generous
     pool.on("from projects where", [{"id": PROJECT_ID}])
     return client
 
@@ -323,12 +324,10 @@ def test_lists_the_files_with_the_public_fields_and_no_paths(
     }
     assert (second["status"], second["error_code"]) == ("invalid", "corrupt_image")
     assert "path" not in response.text
-    sql = pool.ran("from project_files")[0]
-    assert sql == (PROJECT_ID, USER.id)
-    assert "path" not in next(q for q, _ in pool.calls if "from project_files" in q)
-    assert "order by (kind = 'plan') desc, created_at, id" in next(
-        q for q, _ in pool.calls if "from project_files" in q
-    )
+    assert pool.ran("from project_files")[0] == (PROJECT_ID, USER.id)
+    query = next(q for q, _ in pool.calls if "from project_files" in q)
+    assert "path" not in query
+    assert "order by (kind = 'plan') desc, created_at, id" in query
 
 
 def test_a_project_without_files_is_an_empty_list(lister: TestClient) -> None:
@@ -355,6 +354,7 @@ def test_listing_requires_a_token(fake_env: None) -> None:
 
 
 def test_listing_is_rate_limited(lister: TestClient) -> None:
-    app.dependency_overrides[read_limiter] = lambda: RateLimiter(1, 60)
+    tight = RateLimiter(1, 60)
+    app.dependency_overrides[read_limiter] = lambda: tight
 
     assert [lister.get(URL).status_code for _ in range(2)] == [200, 429]
