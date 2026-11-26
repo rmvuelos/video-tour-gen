@@ -13,15 +13,13 @@ type Props = {
 
 /** Collapsible card for the optional project details; the toggle is a disclosure button. */
 export function DetailsCard({ open, onToggle, children }: Props) {
-  const [titleId, hintId, panelId] = [useId(), useId(), useId()]
+  const [hintId, panelId] = [useId(), useId()]
   return (
     <Card className="flex min-h-spec-card flex-col justify-center gap-6 p-card">
       <div className="flex items-center gap-4">
         <Icon src={editIcon} className="text-fg-accent" />
         <div className="flex min-w-0 flex-1 flex-col gap-2">
-          <h2 id={titleId} className="text-title-sm font-semibold">
-            Add optional project details
-          </h2>
+          <h2 className="text-title-sm font-semibold">Add optional project details</h2>
           <p id={hintId} className="text-body text-fg-muted">
             Dimensions, descriptions, materials, lighting or renovation notes.
           </p>
@@ -37,13 +35,7 @@ export function DetailsCard({ open, onToggle, children }: Props) {
           Add description
         </Button>
       </div>
-      <div
-        id={panelId}
-        role="region"
-        aria-labelledby={titleId}
-        hidden={!open}
-        className="flex flex-col gap-6"
-      >
+      <div id={panelId} hidden={!open} className="flex flex-col gap-6">
         {children}
       </div>
     </Card>
