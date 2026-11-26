@@ -118,14 +118,64 @@ describe('useIngestJob', () => {
     expect(api.getLatestJob.mock.calls.length).toBeGreaterThanOrEqual(3)
   })
 
-  it('reports a retry that the server refuses and keeps the failed job', async () => {
-    api.getLatestJob.mockResolvedValue(job('failed', { error_code: 'worker_lost' }))
+  it('treats a 409 job_not_failed as someone else retrying: resume, no error', async () => {
+    api.getLatestJob.mockResolvedValueOnce(job('failed', { error_code: 'worker_lost' }))
+    api.getLatestJob.mockResolvedValue(job('running'))
     api.retryIngest.mockRejectedValue(new ApiRequestError(409, 'job_not_failed', 'x'))
     const { result } = setup()
     await tick(0)
     await act(() => result.current.retry())
-    expect(result.current.retryError).toBe('There is nothing to retry.')
+    await tick(0)
+    expect(result.current.retryError).toBeNull()
+    expect(result.current.job?.status).toBe('running')
+  })
+
+  it('reports a retry that the server refuses and keeps the failed job', async () => {
+    api.getLatestJob.mockResolvedValue(job('failed', { error_code: 'worker_lost' }))
+    api.retryIngest.mockRejectedValue(new ApiRequestError(503, 'enqueue_failed', 'x'))
+    const { result } = setup()
+    await tick(0)
+    await act(() => result.current.retry())
+    expect(result.current.retryError).toBe('We could not start processing. Try again in a moment.')
     expect(result.current.job?.status).toBe('failed')
     expect(result.current.retrying).toBe(false)
+  })
+
+  it('ignores a second retry while one is in flight', async () => {
+    api.getLatestJob.mockResolvedValue(job('failed', { error_code: 'worker_lost' }))
+    api.retryIngest.mockReturnValue(new Promise(() => undefined))
+    const { result } = setup()
+    await tick(0)
+    act(() => void result.current.retry())
+    act(() => void result.current.retry())
+    expect(api.retryIngest).toHaveBeenCalledTimes(1)
+    expect(result.current.retrying).toBe(true)
+  })
+
+  it.each([403, 404])('stops polling for good on a %i', async (status) => {
+    api.getLatestJob.mockRejectedValue(new ApiRequestError(status, 'not_found', 'x'))
+    const { result } = setup()
+    await tick(0)
+    await tick(60_000)
+    expect(api.getLatestJob).toHaveBeenCalledTimes(1)
+    expect(result.current.fatal).toBe(true)
+  })
+
+  it('gives up on a request that hangs and tries again with backoff', async () => {
+    api.getLatestJob.mockImplementationOnce(
+      (_p: string, signal: AbortSignal) =>
+        new Promise((_, reject) =>
+          signal.addEventListener('abort', () => reject(new DOMException('x', 'AbortError'))),
+        ),
+    )
+    api.getLatestJob.mockResolvedValue(job('running'))
+    const { result } = setup()
+    await tick(14_999)
+    expect(result.current.failures).toBe(0)
+    await tick(1)
+    expect(result.current.failures).toBe(1)
+    await tick(4000)
+    expect(api.getLatestJob).toHaveBeenCalledTimes(2)
+    expect(result.current.job?.status).toBe('running')
   })
 })
