@@ -8,6 +8,7 @@ import { Uploader } from '../components/Uploader'
 import { ApiRequestError } from '../lib/api'
 import { getProject, type Project } from '../lib/projects'
 import { useDocumentTitle } from '../lib/use-document-title'
+import { useProjectCrumb } from '../lib/use-project-crumb'
 
 // After a job finishes the project may take a moment to show its new status.
 const REREAD_MS = 2000
@@ -70,6 +71,7 @@ function ProjectView({ id }: { id: string }) {
   // Bumped to read the project again (after a job settles).
   const [reads, setReads] = useState(0)
   useDocumentTitle(state && 'project' in state ? state.project.name : 'Project')
+  useProjectCrumb(state && 'project' in state ? state.project.name : undefined)
 
   // Set once a job is done: until the project shows its new status, errors and a stale
   // "ingesting" keep the current view and read again instead of replacing it.
