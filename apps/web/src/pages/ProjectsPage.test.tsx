@@ -176,7 +176,7 @@ describe('ProjectsPage accessibility', () => {
   })
 
   it('keeps a long project name readable in the title', async () => {
-    const name = 'A very long project name '.repeat(8)
+    const name = 'A very long project name '.repeat(8).trim()
     mock.apiFetch.mockResolvedValueOnce(page([{ ...project(1), name }]))
     renderPage()
     expect(await screen.findByRole('link', { name })).toHaveAttribute('title', name)
