@@ -311,6 +311,12 @@ export function useUploader(projectId: string) {
     [projectId, startOperation],
   )
 
+  /** Marks files the server refused on submit (422), each with its own message. */
+  const markInvalid = useCallback(
+    (errors: { id: string; error: string }[]) => dispatch({ type: 'invalidated', errors }),
+    [],
+  )
+
   const reload = useCallback(() => setReloadKey((k) => k + 1), [])
 
   const counts = Object.fromEntries(
@@ -330,6 +336,7 @@ export function useUploader(projectId: string) {
     slots,
     submit: canSubmit(state.items),
     reload,
+    markInvalid,
     add,
     retry,
     remove,

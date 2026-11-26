@@ -142,12 +142,11 @@ describe('Uploader', () => {
     expect(screen.getByText(/The file is damaged or unreadable/)).toBeInTheDocument()
   })
 
-  it('uploads dropped files and announces it in the one status region', async () => {
+  it('uploads dropped files and announces it in the upload status region', async () => {
     const { user, photoInput } = await setup()
     await user.upload(photoInput, jpg('hall.jpg'))
-    const status = await screen.findByRole('status')
+    const status = await screen.findByRole('status', { name: 'Upload status' })
     await waitFor(() => expect(status).toHaveTextContent('1 photo uploaded'))
-    expect(screen.getAllByRole('status')).toHaveLength(1)
     expect(screen.getByText(/Uploaded/)).toBeInTheDocument()
   })
 
@@ -276,7 +275,7 @@ describe('Uploader details and submit', () => {
       within(list).getByText('The upload did not finish. Upload the file again.'),
     ).toBeVisible()
     expect(within(list).getByText(/does not match the chosen one/)).toBeVisible()
-    expect(screen.getByText('2 files need fixing')).toBeVisible()
+    expect(screen.getByRole('alert')).toHaveTextContent('2 files need fixing')
     await waitFor(() => expect(screen.getByRole('button', { name: 'Remove p2.jpg' })).toHaveFocus())
     expect(sendButton()).toHaveAttribute('aria-disabled', 'true')
   })
@@ -304,7 +303,7 @@ describe('Uploader details and submit', () => {
       ],
     })
     render(<Uploader projectId="p1" onSubmitted={vi.fn()} />)
-    expect(await screen.findByText('1 file needs fixing')).toBeVisible()
+    expect(await screen.findByRole('alert')).toHaveTextContent('1 file needs fixing')
     expect(screen.getByText('The file is damaged or unreadable. Choose another one.')).toBeVisible()
   })
 })

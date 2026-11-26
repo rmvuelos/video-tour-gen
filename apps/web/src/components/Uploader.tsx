@@ -12,6 +12,8 @@ import {
 } from '../lib/upload-rules'
 import { useUploader } from '../lib/use-uploader'
 import type { UploaderItem } from '../lib/uploader-reducer'
+import type { Job } from '../lib/uploads'
+import { SubmitForm } from './SubmitForm'
 import { Alert } from './ui/Alert'
 import { Dropzone } from './ui/Dropzone'
 import { FileCard } from './ui/FileCard'
@@ -61,7 +63,15 @@ function cardState(item: UploaderItem, retry: () => void): CardState {
 }
 
 /** Plan and photo dropzones with their files, wired to useUploader. */
-export function Uploader({ projectId }: { projectId: string }) {
+export function Uploader({
+  projectId,
+  initial,
+  onSubmitted,
+}: {
+  projectId: string
+  initial?: { area_m2?: number | null; description?: string | null }
+  onSubmitted: (job: Job) => void
+}) {
   const up = useUploader(projectId)
   const root = useRef<HTMLDivElement>(null)
   // What to focus once a removed card is gone: a file id, or a kind for its dropzone button.
@@ -88,9 +98,18 @@ export function Uploader({ projectId }: { projectId: string }) {
     focusNext.current = near ? { file: near.id } : { zone: item.kind }
   }
 
+  /** The server refused some files on submit: mark them and move focus to the first. */
+  function refuse(errors: { id: string; error: string }[]) {
+    up.markInvalid(errors)
+    const first = up.items.find((i) => errors.some((e) => e.id === i.id))
+    if (first) focusNext.current = { file: first.id }
+  }
+
+  const invalid = up.items.filter((i) => i.status === 'invalid').length
+
   // One live region for the whole screen, mounted from the start so announcements are heard.
   const status = (
-    <p role="status" className="sr-only">
+    <p role="status" aria-label="Upload status" className="sr-only">
       {up.phase === 'loading' ? 'Loading files…' : up.announcement}
     </p>
   )
@@ -118,6 +137,11 @@ export function Uploader({ projectId }: { projectId: string }) {
   return (
     <div ref={root} className="flex flex-col gap-8">
       {status}
+      {invalid > 0 && (
+        <Alert tone="error">
+          {invalid} {invalid === 1 ? 'file needs' : 'files need'} fixing
+        </Alert>
+      )}
       {up.error && <Alert tone="error">{up.error}</Alert>}
       {(Object.keys(SECTIONS) as FileKind[]).map((kind) => {
         const s = SECTIONS[kind]
@@ -161,9 +185,13 @@ export function Uploader({ projectId }: { projectId: string }) {
           </section>
         )
       })}
-      <p className="text-body text-fg-muted">
-        {up.submit.ok ? 'All files are uploaded.' : up.submit.reason}
-      </p>
+      <SubmitForm
+        projectId={projectId}
+        check={up.submit}
+        initial={initial}
+        onSubmitted={onSubmitted}
+        onFileErrors={refuse}
+      />
     </div>
   )
 }
