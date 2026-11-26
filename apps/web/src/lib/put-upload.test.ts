@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PutUploadError, putUpload } from './put-upload'
 
 class FakeXhr {
-  static last: FakeXhr
+  static last: FakeXhr | undefined
   upload: {
     onprogress?: (e: { lengthComputable: boolean; loaded: number; total: number }) => void
   } = {}
@@ -13,12 +13,15 @@ class FakeXhr {
   url = ''
   body: unknown
   aborted = false
+  done = false
+  static created = 0
   onload?: () => void
   onerror?: () => void
   ontimeout?: () => void
   onabort?: () => void
   constructor() {
     FakeXhr.last = this
+    FakeXhr.created++
   }
   open(method: string, url: string) {
     this.method = method
@@ -31,6 +34,7 @@ class FakeXhr {
     this.body = body
   }
   abort() {
+    if (this.done) return
     this.aborted = true
     this.onabort?.()
   }
@@ -38,16 +42,24 @@ class FakeXhr {
 
 const file = new File(['abc'], 'a.jpg', { type: 'image/jpeg' })
 const URL_OK = 'https://storage.example.test/upload?token=abc'
-const xhr = () => FakeXhr.last
+const xhr = () => FakeXhr.last!
 
 describe('putUpload', () => {
-  beforeEach(() => vi.stubGlobal('XMLHttpRequest', FakeXhr))
-  afterEach(() => vi.unstubAllGlobals())
+  beforeEach(() => {
+    FakeXhr.last = undefined
+    FakeXhr.created = 0
+    vi.stubGlobal('XMLHttpRequest', FakeXhr)
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
 
   it('PUTs the file with the given headers and nothing else', async () => {
     const done = putUpload(URL_OK, { 'Content-Type': 'image/jpeg' }, file)
     xhr().status = 200
     xhr().onload?.()
+    xhr().done = true
     await expect(done).resolves.toBeUndefined()
     expect(xhr().method).toBe('PUT')
     expect(xhr().url).toBe(URL_OK)
@@ -104,12 +116,55 @@ describe('putUpload', () => {
     await expect(putUpload(URL_OK, {}, file, { signal: controller.signal })).rejects.toMatchObject({
       name: 'AbortError',
     })
+    expect(FakeXhr.created).toBe(0)
   })
 
-  it.each(['javascript:alert(1)', 'data:text/plain,x', 'not a url', 'ftp://x.test/a'])(
-    'refuses to PUT to %s',
+  it('does not abort the request when the signal fires after success', async () => {
+    const controller = new AbortController()
+    const done = putUpload(URL_OK, {}, file, { signal: controller.signal })
+    xhr().status = 200
+    xhr().onload?.()
+    xhr().done = true
+    await done
+    controller.abort()
+    expect(xhr().aborted).toBe(false)
+  })
+
+  it.each(['http://localhost:55421/a', 'http://127.0.0.1:55421/a', 'http://[::1]:55421/a'])(
+    'allows plain http for the local stack at %s',
     async (url) => {
-      await expect(putUpload(url, {}, file)).rejects.toMatchObject({ code: 'invalid_url' })
+      const done = putUpload(url, {}, file)
+      xhr().status = 200
+      xhr().onload?.()
+      await expect(done).resolves.toBeUndefined()
     },
   )
+
+  it('rejects with invalid_url when open throws', async () => {
+    vi.spyOn(FakeXhr.prototype, 'open').mockImplementationOnce(() => {
+      throw new DOMException('bad', 'SyntaxError')
+    })
+    await expect(putUpload(URL_OK, {}, file)).rejects.toMatchObject({ code: 'invalid_url' })
+  })
+
+  it('rejects with network_error when a header is refused', async () => {
+    vi.spyOn(FakeXhr.prototype, 'setRequestHeader').mockImplementationOnce(() => {
+      throw new DOMException('bad', 'SyntaxError')
+    })
+    await expect(putUpload(URL_OK, { 'X-Bad': 'v' }, file)).rejects.toMatchObject({
+      code: 'network_error',
+    })
+  })
+
+  it.each([
+    'javascript:alert(1)',
+    'data:text/plain,x',
+    'not a url',
+    'ftp://x.test/a',
+    'http://storage.example.test/a',
+    'https://user:pass@storage.example.test/a',
+  ])('refuses to PUT to %s', async (url) => {
+    await expect(putUpload(url, {}, file)).rejects.toMatchObject({ code: 'invalid_url' })
+    expect(FakeXhr.created).toBe(0)
+  })
 })
