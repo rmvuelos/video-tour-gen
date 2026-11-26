@@ -139,7 +139,7 @@ def test_only_editable_projects_accept_files(
     response = client.post(URL, json={"files": [photo()]})
 
     assert response.status_code == 409
-    assert response.json()["error"]["code"] == "project_not_draft"
+    assert response.json()["error"]["code"] == "project_not_editable"
 
 
 def test_a_needs_fix_project_accepts_files_counting_the_ones_that_remain(

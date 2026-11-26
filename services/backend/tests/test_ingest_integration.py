@@ -6,10 +6,12 @@ configuration (`celery worker -P prefork`), so a real one adds start-up time but
 """
 
 import io
+import os
 from collections.abc import Callable, Iterator
 from typing import Any
 
 import httpx2 as httpx
+import psycopg
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
@@ -213,3 +215,29 @@ def test_deleting_a_valid_file_also_deletes_its_derivatives(
     assert gone.status_code == 204 and derived(storage, ana, project, valid) is None
     thumb = f"{ana.id}/{project}/{valid['id']}/thumb.jpg"
     assert storage.download("derived", thumb, CAP) is None
+
+
+def test_a_valid_plan_keeps_its_page_when_a_resubmit_names_another(
+    client: TestClient, make_user: Callable[[], Account], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ana = make_user()
+    project, _, registered = needs_fix_project(client, ana, monkeypatch)  # plan rendered at page 1
+    base = f"/projects/{project}/files"
+    client.delete(f"{base}/{registered[1]['file_id']}", headers=ana.headers)
+    data = image_bytes("JPEG", (80, 60))
+    item = {"kind": "photo", "filename": "n.jpg", "size": len(data), "mime": "image/jpeg"}
+    target = client.post(base, json={"files": [item]}, headers=ana.headers).json()["files"][0]
+    url = target["upload_url"].replace("127.0.0.1", "host.docker.internal")
+    httpx.put(url, headers=target["headers"], content=data, timeout=TIMEOUT).raise_for_status()
+    monkeypatch.setattr(celery_app, "send_task", lambda name, args: None)
+
+    submit = client.post(
+        f"/projects/{project}/submit", json={"plan_page_index": 2}, headers=ana.headers
+    )
+
+    assert submit.status_code == 202
+    with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+        row = conn.execute(
+            "select page_index from project_files where id = %s", (registered[0]["file_id"],)
+        ).fetchone()
+    assert row == (1,)
