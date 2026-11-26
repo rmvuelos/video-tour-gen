@@ -8,7 +8,7 @@ export function UploadHeader() {
   return (
     <header className="flex flex-col gap-hero">
       <Stepper steps={STEPS} current={0} />
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-2">
         <Eyebrow tone="accent">Phase 01 / 03</Eyebrow>
         <p className="text-display font-semibold">Every room begins with a story.</p>
         <p className="text-lead text-fg-muted">

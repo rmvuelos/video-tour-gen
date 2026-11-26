@@ -15,7 +15,7 @@ type Props = {
 export function DetailsCard({ open, onToggle, children }: Props) {
   const [titleId, hintId, panelId] = [useId(), useId(), useId()]
   return (
-    <Card className="flex flex-col gap-6 p-card">
+    <Card className="flex min-h-spec-card flex-col justify-center gap-6 p-card">
       <div className="flex items-center gap-4">
         <Icon src={editIcon} className="text-fg-accent" />
         <div className="flex min-w-0 flex-1 flex-col gap-2">

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FileRejection } from 'react-dropzone'
 import limits from '../../../../shared/input-limits.json'
-import fileIcon from '../assets/icons/file.svg'
+import gridIcon from '../assets/icons/grid.svg'
 import imageIcon from '../assets/icons/image.svg'
 import { formatBytes } from '../lib/format-bytes'
 import {
@@ -29,7 +29,7 @@ const SECTIONS = {
     title: 'Floor plan',
     label: 'Floor plan files',
     button: 'Choose plan',
-    icon: fileIcon,
+    icon: gridIcon,
     accept: accept(limits.floorPlan.mimeTypes),
     maxSize: limits.floorPlan.maxBytes,
     help: `PDF, PNG or JPG. One file, up to ${formatBytes(limits.floorPlan.maxBytes)}.`,
@@ -199,7 +199,7 @@ export function Uploader({
         }}
         announce={up.announce}
       >
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-5">
           <div className="flex items-baseline justify-between gap-4">
             <Eyebrow>Your materials</Eyebrow>
             <Eyebrow>

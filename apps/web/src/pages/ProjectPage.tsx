@@ -136,7 +136,7 @@ function ProjectView({ id }: { id: string }) {
     )
   const editing = state.project.status === 'draft' || state.project.status === 'needs_fix'
   return (
-    <div className="flex flex-col gap-hero">
+    <div className="flex flex-col gap-section">
       {/* In the upload view the name is shown in the overview card: the h1 is for assistive tech. */}
       <PageTitle className={`break-words ${editing ? 'sr-only' : 'text-title-lg font-semibold'}`}>
         {state.project.name}
