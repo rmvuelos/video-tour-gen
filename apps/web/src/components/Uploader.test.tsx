@@ -396,13 +396,6 @@ describe('Uploader details and submit', () => {
     expect(status()).toHaveTextContent('Sending your files…')
   })
 
-  it('keeps the send button out of the optional details', async () => {
-    const { user } = await setupReady()
-    await user.click(detailsToggle())
-    const details = screen.getByRole('region', { name: 'Add optional project details' })
-    expect(within(details).queryByRole('button')).not.toBeInTheDocument()
-  })
-
   it('summarises the files that need fixing when a project comes back from the ingest', async () => {
     api.listFiles.mockResolvedValue({
       files: [
@@ -442,7 +435,6 @@ describe('Uploader layout', () => {
     await user.click(toggle)
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
     expect(screen.getByLabelText('Area (m²)')).toBeVisible()
-    expect(screen.getByRole('region', { name: 'Add optional project details' })).toBe(panel)
 
     await user.type(screen.getByLabelText('Description'), 'Keep me')
     await user.click(toggle)
@@ -468,6 +460,8 @@ describe('Uploader layout', () => {
     await user.click(sendButton())
     expect(detailsToggle()).toHaveAttribute('aria-expanded', 'true')
     await waitFor(() => expect(area).toHaveFocus())
+    expect(area).toBeVisible()
+    expect(screen.getByText(/Enter a number above 0/)).toBeVisible()
     expect(api.submitProject).not.toHaveBeenCalled()
   })
 
@@ -492,7 +486,9 @@ describe('Uploader layout', () => {
     expect(screen.getByText(/Secure uploads/)).toHaveTextContent(
       'Secure uploads · PDF, PNG, JPG and WebP accepted',
     )
-    expect(sendButton()).toBeVisible()
-    expect(screen.getByText('All files are uploaded.')).toBeVisible()
+    const bar = screen.getByText(/Secure uploads/).parentElement!
+    expect(bar).toContainElement(sendButton())
+    expect(bar).toContainElement(screen.getByText('All files are uploaded.'))
+    expect(bar).not.toContainElement(detailsToggle())
   })
 })

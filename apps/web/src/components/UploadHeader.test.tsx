@@ -15,7 +15,8 @@ describe('UploadHeader', () => {
 
   it('shows the phase, the headline and the subtitle', () => {
     render(<UploadHeader />)
-    expect(screen.getByText('Phase 01 / 03')).toBeInTheDocument()
+    expect(screen.getByText('Phase 01 / 03')).toHaveAttribute('aria-hidden', 'true')
+    expect(screen.getByText('Phase 1 of 3')).toHaveClass('sr-only')
     expect(screen.getByText('Every room begins with a story.')).toBeInTheDocument()
     expect(
       screen.getByText(

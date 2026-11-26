@@ -1,14 +1,14 @@
 import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import type { sourceProgress } from '../lib/upload-rules'
+import { sourceProgress, type UploadStatus } from '../lib/upload-rules'
 import { ProjectOverview } from './ProjectOverview'
 
-const progress = (plan: number, photos: number): ReturnType<typeof sourceProgress> => ({
-  plan: { count: plan, max: 1, met: plan === 1 },
-  photos: { count: photos, min: 3, max: 10, met: photos >= 3 },
-  met: Number(plan === 1) + Number(photos >= 3),
-  total: 2,
-})
+const file = (kind: 'plan' | 'photo', status: UploadStatus = 'valid') => ({ kind, status })
+const progress = (plan: number, photos: number) =>
+  sourceProgress([
+    ...Array.from({ length: plan }, () => file('plan')),
+    ...Array.from({ length: photos }, () => file('photo')),
+  ])
 
 describe('ProjectOverview', () => {
   it('shows the project name and a decorative illustration', () => {
@@ -22,6 +22,7 @@ describe('ProjectOverview', () => {
   it('lists the required inputs with the real counts and a text state for each', () => {
     render(<ProjectOverview name="Loft" progress={progress(1, 2)} />)
     const list = screen.getByRole('list', { name: 'Required inputs' })
+    expect(list).toHaveAttribute('role', 'list')
     const [plan, photos] = within(list).getAllByRole('listitem')
     expect(plan).toHaveTextContent('Blueprint / sketch')
     expect(plan).toHaveTextContent('1 of 1')
