@@ -1,22 +1,16 @@
 import { lazy, Suspense } from 'react'
-import { Route, Routes } from 'react-router'
+import { Navigate, Route, Routes } from 'react-router'
 import { RequireAuth } from './auth/RequireAuth'
-import { PageTitle } from './components/PageTitle'
 import { AppShell } from './layout/AppShell'
-import { useDocumentTitle } from './lib/use-document-title'
 import { AuthPage } from './pages/AuthPage'
 import { NotFound } from './pages/NotFound'
 import { ProjectPage } from './pages/ProjectPage'
+import { ProjectsPage } from './pages/ProjectsPage'
 
 // The gallery is dev and e2e only. The import sits in the dead branch so production builds
 // drop the chunk (scripts/check-no-dev-routes.mjs fails CI if it ever ships).
 const galleryEnabled = import.meta.env.DEV || import.meta.env.MODE === 'e2e'
 const UiGallery = galleryEnabled ? lazy(() => import('./dev/UiGallery')) : null
-
-function Home() {
-  useDocumentTitle('Home')
-  return <PageTitle className="text-title font-semibold">Welcome back</PageTitle>
-}
 
 export function App() {
   return (
@@ -35,7 +29,8 @@ export function App() {
       )}
       <Route element={<RequireAuth />}>
         <Route element={<AppShell />}>
-          <Route path="/" element={<Home />} />
+          <Route path="/" element={<Navigate to="/projects" replace />} />
+          <Route path="/projects" element={<ProjectsPage />} />
           <Route path="/projects/:id" element={<ProjectPage />} />
         </Route>
       </Route>
