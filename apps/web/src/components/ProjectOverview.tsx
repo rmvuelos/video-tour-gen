@@ -52,14 +52,18 @@ export function ProjectOverview({ name, progress }: { name: string; progress: Pr
           <Eyebrow>Project overview</Eyebrow>
           <p className="text-title-lg font-semibold break-words">{name}</p>
         </div>
-        <div className="relative mt-2">
-          <img src={illustration} alt="" className="block w-full rounded-panel" />
-          <Eyebrow className="absolute bottom-3 left-summary-caption">
-            Illustrative floor plan
-          </Eyebrow>
+        <div className="mt-2 flex flex-col gap-2">
+          <img
+            src={illustration}
+            alt=""
+            className="mx-auto block w-full max-w-illustration rounded-panel"
+          />
+          <p>
+            <Eyebrow>Illustrative floor plan</Eyebrow>
+          </p>
         </div>
         <Eyebrow>Required inputs</Eyebrow>
-        <ul aria-label="Required inputs" className="flex flex-col gap-2.5">
+        <ul role="list" aria-label="Required inputs" className="flex flex-col gap-2.5">
           <Requirement
             label="Blueprint / sketch"
             count={plan.count}
