@@ -1,7 +1,7 @@
 import { apiFetch } from './api'
 
 export const PAGE_SIZE = 20
-const NAME_MAX = 120
+export const NAME_MAX = 120
 
 type ProjectStatus = 'draft' | 'ingesting' | 'ready' | 'needs_fix'
 export type Project = {
