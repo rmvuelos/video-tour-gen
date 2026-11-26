@@ -14,9 +14,9 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
+import app.worker.ingest as ingest_module
 from app.storage import StorageClient, create_storage
 from app.worker import celery_app
-import app.worker.ingest as ingest_module
 from app.worker.ingest import ingest
 from tests.conftest import Account
 from tests.ingest_fixtures import encrypted_pdf_bytes, image_bytes, pdf_bytes
