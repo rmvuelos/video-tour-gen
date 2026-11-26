@@ -149,7 +149,8 @@ export function Uploader({
   const progress = sourceProgress(up.items)
   const invalid = up.items.filter((i) => i.status === 'invalid').length
 
-  // One live region for the whole screen, mounted from the start so announcements are heard.
+  // One live region for the upload messages, mounted from the start so announcements are heard
+  // (the Textarea's character counter is a separate one).
   const status = (
     <p role="status" aria-label="Upload status" className="sr-only">
       {up.phase === 'loading' ? 'Loading files…' : up.announcement}
@@ -206,7 +207,7 @@ export function Uploader({
               {progress.met} of {progress.total} required sources
             </Eyebrow>
           </div>
-          <div className="grid items-start gap-card-gap lg:grid-cols-2">
+          <div className="grid items-start gap-card-gap @min-dropzones:grid-cols-2">
             {(Object.keys(SECTIONS) as FileKind[]).map((kind) => {
               const s = SECTIONS[kind]
               const slots = up.slots[kind]

@@ -177,8 +177,12 @@
   --spacing-section: 45px;
   --spacing-stack: 29px;
   --spacing-spec-card: 133px;
-  --container-summary: 68rem;
-  --spacing-summary-caption: 86px;
+  /* Content width from which the summary sits beside the dropzones: two dropzones of at least
+     25rem, the summary and the gap. */
+  --container-summary: 81rem;
+  /* Width of the dropzone column from which the two dropzones sit side by side. */
+  --container-dropzones: 51rem;
+  --spacing-illustration: 395px;
 }
 
 @keyframes indeterminate {

@@ -77,7 +77,7 @@ export function SubmitForm({
     <form noValidate onSubmit={send} className="flex flex-col gap-8">
       <div className="@container">
         <div className="grid gap-x-card gap-y-card-gap @min-summary:grid-cols-[minmax(0,1fr)_var(--spacing-summary)]">
-          <div className="flex min-w-0 flex-col gap-stack">
+          <div className="@container flex min-w-0 flex-col gap-stack">
             {children}
             <DetailsCard open={open} onToggle={() => setOpen((o) => !o)}>
               <Field
