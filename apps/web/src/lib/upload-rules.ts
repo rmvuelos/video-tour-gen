@@ -90,6 +90,19 @@ export function canSubmit(files: { kind: FileKind; status: UploadStatus }[]): Ch
   return { ok: true }
 }
 
+const FINISHED: UploadStatus[] = ['pending', 'uploaded', 'valid']
+
+/** How many of the two required sources (the plan, the photos) are in, counting finished files only. */
+export function sourceProgress(files: { kind: FileKind; status: UploadStatus }[]) {
+  const done = (kind: FileKind) =>
+    files.filter((f) => f.kind === kind && FINISHED.includes(f.status)).length
+  const [plans, photos] = [done('plan'), done('photo')]
+  const plan = { count: plans, max: RULES.plan.max, met: plans === RULES.plan.max }
+  const met = photos >= MIN_PHOTOS && photos <= RULES.photo.max
+  const photo = { count: photos, min: MIN_PHOTOS, max: RULES.photo.max, met }
+  return { plan, photos: photo, met: Number(plan.met) + Number(photo.met), total: 2 }
+}
+
 const TOO_LARGE = 'The file is too large. Reduce it or choose another.'
 const NOT_FINISHED = 'The upload did not finish. Upload the file again.'
 const MESSAGES: Record<string, string> = {
