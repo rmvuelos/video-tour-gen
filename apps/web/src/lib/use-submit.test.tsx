@@ -12,9 +12,13 @@ const options = { plan_page_index: 0, area_m2: 80, description: 'Sunny' }
 
 function setup() {
   const onSubmitted = vi.fn()
-  const onFileErrors = vi.fn()
-  const view = renderHook(() => useSubmit('p1', { onSubmitted, onFileErrors }))
-  return { ...view, onSubmitted, onFileErrors }
+  const onFileErrors = vi.fn(() => true)
+  const onStale = vi.fn()
+  const onNotEditable = vi.fn()
+  const view = renderHook(() =>
+    useSubmit('p1', { onSubmitted, onFileErrors, onStale, onNotEditable }),
+  )
+  return { ...view, onSubmitted, onFileErrors, onStale, onNotEditable }
 }
 
 const rejectWith = (e: unknown) =>
@@ -108,5 +112,63 @@ describe('useSubmit', () => {
     expect(signal.aborted).toBe(true)
     await Promise.resolve()
     expect(onSubmitted).not.toHaveBeenCalled()
+  })
+
+  it('reads the project again when it is no longer editable', async () => {
+    rejectWith(new ApiRequestError(409, 'project_not_editable', 'x'))
+    const { result, onNotEditable, onStale } = setup()
+    await act(() => result.current.submit(options))
+    expect(onNotEditable).toHaveBeenCalledTimes(1)
+    expect(onStale).not.toHaveBeenCalled()
+    expect(result.current.error).toMatch(/already sent/)
+  })
+
+  it('reloads the files when they changed while sending', async () => {
+    rejectWith(new ApiRequestError(409, 'files_changed', 'x'))
+    const { result, onStale } = setup()
+    await act(() => result.current.submit(options))
+    expect(onStale).toHaveBeenCalledTimes(1)
+    expect(result.current.error).toMatch(/files changed/)
+  })
+
+  it('falls back to a message and a reload when no refused file is on screen', async () => {
+    rejectWith(
+      new ApiRequestError(422, 'invalid_files', 'x', [
+        { code: 'missing_object', message: 'm', file_id: 'gone' },
+      ]),
+    )
+    const { result, onFileErrors, onStale } = setup()
+    onFileErrors.mockReturnValue(false)
+    await act(() => result.current.submit(options))
+    expect(result.current.error).toBe('Some files are not valid. Fix them and try again.')
+    expect(onStale).toHaveBeenCalledTimes(1)
+  })
+
+  it('lets a new project send after the previous request was aborted', async () => {
+    api.submitProject.mockImplementationOnce(
+      (_p: string, _o: object, s: AbortSignal) =>
+        new Promise((_, reject) => {
+          s.addEventListener('abort', () => reject(new DOMException('x', 'AbortError')))
+        }),
+    )
+    api.submitProject.mockResolvedValue(job)
+    const onSubmitted = vi.fn()
+    const view = renderHook(
+      ({ id }) =>
+        useSubmit(id, {
+          onSubmitted,
+          onFileErrors: () => true,
+          onStale: vi.fn(),
+          onNotEditable: vi.fn(),
+        }),
+      {
+        initialProps: { id: 'p1' },
+      },
+    )
+    act(() => void view.result.current.submit(options))
+    view.rerender({ id: 'p2' })
+    await act(async () => undefined)
+    await act(() => view.result.current.submit(options))
+    expect(onSubmitted).toHaveBeenCalledTimes(1)
   })
 })
