@@ -160,7 +160,7 @@ describe('Uploader', () => {
 
   it('shows a file list only when it has files, with list semantics kept', async () => {
     await setup([serverFile('a')])
-    expect(screen.getAllByRole('list')).toHaveLength(1)
+    expect(screen.queryByRole('list', { name: 'Floor plan files' })).not.toBeInTheDocument()
     expect(screen.getByRole('list', { name: 'Photo files' })).toHaveAttribute('role', 'list')
   })
 

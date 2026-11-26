@@ -7,6 +7,7 @@ import { formatBytes } from '../lib/format-bytes'
 import {
   fullMessage,
   rejectionMessage,
+  sourceProgress,
   type FileKind,
   type RejectionReason,
 } from '../lib/upload-rules'
@@ -16,7 +17,9 @@ import { useSubmit } from '../lib/use-submit'
 import type { Job } from '../lib/uploads'
 import { SubmitForm, type Details } from './SubmitForm'
 import { Alert } from './ui/Alert'
+import { ProjectOverview } from './ProjectOverview'
 import { Dropzone } from './ui/Dropzone'
+import { Eyebrow } from './ui/Eyebrow'
 import { FileCard } from './ui/FileCard'
 
 const accept = (types: readonly string[]) => Object.fromEntries(types.map((t) => [t, []]))
@@ -72,11 +75,13 @@ const inScreenOrder = (items: UploaderItem[]) => [
 /** Plan and photo dropzones with their files, wired to useUploader. */
 export function Uploader({
   projectId,
+  projectName,
   initial,
   onSubmitted,
   onNotEditable,
 }: {
   projectId: string
+  projectName: string
   initial?: { area_m2?: number | null | undefined; description?: string | null | undefined }
   onSubmitted: (job: Job) => void
   /** The server says the project was already sent: the page reads it again. */
@@ -141,6 +146,7 @@ export function Uploader({
   }
 
   const submitError = send.error && <Alert tone="error">{send.error}</Alert>
+  const progress = sourceProgress(up.items)
   const invalid = up.items.filter((i) => i.status === 'invalid').length
 
   // One live region for the whole screen, mounted from the start so announcements are heard.
@@ -172,7 +178,7 @@ export function Uploader({
   }
 
   return (
-    <div ref={root} className="flex flex-col gap-8">
+    <div ref={root} className="flex flex-col gap-card-gap">
       {status}
       {invalid > 0 && (
         <Alert tone="error">
@@ -181,49 +187,8 @@ export function Uploader({
       )}
       {submitError}
       {up.error && <Alert tone="error">{up.error}</Alert>}
-      {(Object.keys(SECTIONS) as FileKind[]).map((kind) => {
-        const s = SECTIONS[kind]
-        const slots = up.slots[kind]
-        return (
-          <section key={kind} className="flex flex-col gap-4">
-            <Dropzone
-              data-zone={kind}
-              title={s.title}
-              titleLevel={2}
-              help={s.help}
-              buttonLabel={s.button}
-              icon={s.icon}
-              accept={s.accept}
-              maxSize={s.maxSize}
-              maxFiles={slots}
-              disabled={slots === 0}
-              {...(slots === 0 && { disabledReason: fullMessage(kind) })}
-              onFilesAccepted={(files) => void up.add(kind, files)}
-              rejectionText={({ file, errors }: FileRejection) =>
-                rejectionMessage(file, kind, REASONS[errors[0]?.code ?? ''] ?? 'type', slots)
-              }
-            />
-            {up.items.some((i) => i.kind === kind) && (
-              <ul role="list" aria-label={s.label} className="flex flex-col gap-3">
-                {up.items
-                  .filter((i) => i.kind === kind)
-                  .map((item) => (
-                    <li key={item.id} data-file-id={item.id}>
-                      <FileCard
-                        file={
-                          item.file ?? { name: item.filename, size: item.size, type: item.mime }
-                        }
-                        onRemove={() => remove(item)}
-                        {...cardState(item, () => void up.retry(item.id))}
-                      />
-                    </li>
-                  ))}
-              </ul>
-            )}
-          </section>
-        )
-      })}
       <SubmitForm
+        overview={<ProjectOverview name={projectName} progress={progress} />}
         check={up.submit}
         values={details}
         onChange={setDetails}
@@ -233,7 +198,64 @@ export function Uploader({
           void send.submit(options)
         }}
         announce={up.announce}
-      />
+      >
+        <div className="flex flex-col gap-4">
+          <div className="flex items-baseline justify-between gap-4">
+            <Eyebrow>Your materials</Eyebrow>
+            <Eyebrow>
+              {progress.met} of {progress.total} required sources
+            </Eyebrow>
+          </div>
+          <div className="grid items-start gap-card-gap lg:grid-cols-2">
+            {(Object.keys(SECTIONS) as FileKind[]).map((kind) => {
+              const s = SECTIONS[kind]
+              const slots = up.slots[kind]
+              return (
+                <section key={kind} className="flex flex-col gap-4">
+                  <Dropzone
+                    data-zone={kind}
+                    title={s.title}
+                    titleLevel={2}
+                    help={s.help}
+                    buttonLabel={s.button}
+                    icon={s.icon}
+                    accept={s.accept}
+                    maxSize={s.maxSize}
+                    maxFiles={slots}
+                    disabled={slots === 0}
+                    {...(slots === 0 && { disabledReason: fullMessage(kind) })}
+                    onFilesAccepted={(files) => void up.add(kind, files)}
+                    rejectionText={({ file, errors }: FileRejection) =>
+                      rejectionMessage(file, kind, REASONS[errors[0]?.code ?? ''] ?? 'type', slots)
+                    }
+                  />
+                  {up.items.some((i) => i.kind === kind) && (
+                    <ul role="list" aria-label={s.label} className="flex flex-col gap-3">
+                      {up.items
+                        .filter((i) => i.kind === kind)
+                        .map((item) => (
+                          <li key={item.id} data-file-id={item.id}>
+                            <FileCard
+                              file={
+                                item.file ?? {
+                                  name: item.filename,
+                                  size: item.size,
+                                  type: item.mime,
+                                }
+                              }
+                              onRemove={() => remove(item)}
+                              {...cardState(item, () => void up.retry(item.id))}
+                            />
+                          </li>
+                        ))}
+                    </ul>
+                  )}
+                </section>
+              )
+            })}
+          </div>
+        </div>
+      </SubmitForm>
     </div>
   )
 }
