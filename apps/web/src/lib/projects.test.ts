@@ -23,6 +23,10 @@ describe('projectNameError', () => {
     expect(projectNameError(name)).toBeUndefined()
   })
 
+  it('counts characters, not UTF-16 units, like the API', () => {
+    expect(projectNameError('🏠'.repeat(120))).toBeUndefined()
+  })
+
   it('counts the trimmed name, like the API', () => {
     expect(projectNameError(` ${'a'.repeat(120)} `)).toBeUndefined()
   })
