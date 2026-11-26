@@ -9,7 +9,7 @@ from app.api import app
 from app.auth import current_user
 from app.db import get_pool
 from app.errors import ApiError
-from app.ratelimit import RateLimiter, files_limiter
+from app.ratelimit import RateLimiter, files_limiter, read_limiter
 from app.storage import get_storage
 from tests.fakes import PROJECT_ID, USER, FakePool, FakeStorage
 
@@ -278,3 +278,83 @@ def test_filenames_with_separators_or_invisible_characters_are_422(
     client: TestClient, name: str
 ) -> None:
     assert client.post(URL, json={"files": [photo(filename=name)]}).status_code == 422
+
+
+def _row(**over: Any) -> dict[str, Any]:
+    return {
+        "id": uuid.uuid4(),
+        "kind": "photo",
+        "original_filename": "sala.jpg",
+        "size_bytes": 123,
+        "declared_mime": "image/jpeg",
+        "status": "valid",
+        "error_code": None,
+        "page_index": None,
+    } | over
+
+
+@pytest.fixture
+def lister(client: TestClient, pool: FakePool) -> TestClient:
+    app.dependency_overrides[read_limiter] = lambda: RateLimiter(1000, 60)
+    pool.on("from projects where", [{"id": PROJECT_ID}])
+    return client
+
+
+def test_lists_the_files_with_the_public_fields_and_no_paths(
+    lister: TestClient, pool: FakePool
+) -> None:
+    plan_row = _row(kind="plan", original_filename="p.pdf", declared_mime="application/pdf")
+    bad = _row(status="invalid", error_code="corrupt_image")
+    pool.on("from project_files", [plan_row, bad])
+
+    response = lister.get(URL)
+
+    assert response.status_code == 200
+    first, second = response.json()["files"]
+    assert first == {
+        "id": str(plan_row["id"]),
+        "kind": "plan",
+        "filename": "p.pdf",
+        "size": 123,
+        "mime": "application/pdf",
+        "status": "valid",
+        "error_code": None,
+        "page_index": None,
+    }
+    assert (second["status"], second["error_code"]) == ("invalid", "corrupt_image")
+    assert "path" not in response.text
+    sql = pool.ran("from project_files")[0]
+    assert sql == (PROJECT_ID, USER.id)
+    assert "path" not in next(q for q, _ in pool.calls if "from project_files" in q)
+    assert "order by (kind = 'plan') desc, created_at, id" in next(
+        q for q, _ in pool.calls if "from project_files" in q
+    )
+
+
+def test_a_project_without_files_is_an_empty_list(lister: TestClient) -> None:
+    response = lister.get(URL)
+
+    assert (response.status_code, response.json()) == (200, {"files": []})
+
+
+def test_listing_unknown_foreign_or_malformed_project_is_404(
+    lister: TestClient, pool: FakePool
+) -> None:
+    pool.answers.clear()
+    pool.on("from project_files", [_row()])  # never reached
+
+    missing, malformed = lister.get(URL), lister.get("/projects/nope/files")
+
+    assert missing.status_code == malformed.status_code == 404
+    assert missing.json() == malformed.json()
+    assert not pool.ran("from project_files")
+
+
+def test_listing_requires_a_token(fake_env: None) -> None:
+    assert TestClient(app).get(URL).status_code == 401
+
+
+def test_listing_is_rate_limited(lister: TestClient) -> None:
+    app.dependency_overrides[read_limiter] = lambda: RateLimiter(1, 60)
+
+    assert [lister.get(URL).status_code for _ in range(2)] == [200, 429]

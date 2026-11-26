@@ -169,3 +169,28 @@ def test_a_signing_failure_leaves_no_rows_taking_up_slots(
 
     assert failed.status_code == 502
     assert retried.status_code == 201  # the maximum fits again: the failed rows are gone
+
+
+def test_lists_only_your_files_plan_first(
+    client: TestClient, make_user: Callable[[], Account]
+) -> None:
+    ana, ben = make_user(), make_user()
+    project_id, targets = _register(client, ana, [20, 30, 30, 30])
+
+    listed = client.get(f"/projects/{project_id}/files", headers=ana.headers)
+    foreign = client.get(f"/projects/{project_id}/files", headers=ben.headers)
+
+    assert listed.status_code == 200
+    files = listed.json()["files"]
+    assert [f["id"] for f in files] == [t["file_id"] for t in targets]  # plan first, then created
+    assert files[0] | {"id": None} == {
+        "id": None,
+        "kind": "plan",
+        "filename": "f0.pdf",
+        "size": 20,
+        "mime": "application/pdf",
+        "status": "pending",
+        "error_code": None,
+        "page_index": None,
+    }
+    assert foreign.status_code == 404
